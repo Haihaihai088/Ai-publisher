@@ -50,9 +50,17 @@ class WechatPublisher(BasePublisher):
             page = context.new_page()
             page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")
             print("请用微信扫码登录公众号后台，验证账号可用...")
-            input("确认可以正常登录后按 Enter...")
-            self.mark_configured()
-            print("公众号已配置完成")
+            try:
+                # 等待扫码后页面跳转到主功能页（最长等 3 分钟）
+                page.wait_for_function(
+                    "() => !window.location.href.includes('/cgi-bin/login')"
+                    " && window.location.pathname !== '/'",
+                    timeout=180_000
+                )
+                self.mark_configured()
+                print("公众号已配置完成")
+            except PWTimeout:
+                print("等待超时，公众号未配置")
             browser.close()
 
     # ─────────────────────────────────────────
