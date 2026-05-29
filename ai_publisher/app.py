@@ -181,7 +181,7 @@ with tab_new:
             preview_cols = st.columns(min(len(uploaded_images), 3))
             for i, img in enumerate(uploaded_images[:3]):
                 with preview_cols[i]:
-                    st.image(img, use_column_width=True)
+                    st.image(img, use_container_width=True)
 
         # 平台选择（从注册表动态生成）
         st.markdown("**🎯 选择发布平台**")
