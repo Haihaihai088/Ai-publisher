@@ -71,6 +71,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
+# 启动配置校验
+# ─────────────────────────────────────────────
+
+ok, errors = config.validate_config()
+if not ok:
+    for e in errors:
+        st.error(f"❌ 配置错误：{e}")
+    st.info("请编辑 ai_publisher/.env 文件，参考 ai_publisher/.env.example 填入正确的值")
+    st.stop()
+
+# ─────────────────────────────────────────────
 # 发布器实例（用于登录状态检测）
 # ─────────────────────────────────────────────
 
@@ -213,21 +224,24 @@ with tab_new:
             # 存相对路径
             image_paths.append(str(dest.relative_to(config.DATA_DIR)))
 
-        # 创建任务
-        task = task_manager.create_task(
-            original_content=content_input.strip(),
-            platforms=selected_platforms,
-            images=image_paths,
-        )
+        try:
+            # 创建任务
+            task = task_manager.create_task(
+                original_content=content_input.strip(),
+                platforms=selected_platforms,
+                images=image_paths,
+            )
 
-        # 启动 AI 处理子进程
-        import ai_processor
-        ai_processor.start_processing(task["id"])
+            # 启动 AI 处理子进程
+            import ai_processor
+            ai_processor.start_processing(task["id"])
 
-        st.success(f"✅ 任务已创建（ID: {task['id']}），AI 正在处理中…")
-        st.info("请切换到「任务看板」查看进度，或切换到「审核队列」等待 AI 完成")
-        time.sleep(1)
-        st.rerun()
+            st.success(f"✅ 任务已创建（ID: {task['id']}），AI 正在处理中…")
+            st.info("请切换到「任务看板」查看进度，或切换到「审核队列」等待 AI 完成")
+            time.sleep(1)
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ 任务创建失败：{e}")
 
 
 # ══════════════════════════════════════════════
@@ -248,7 +262,11 @@ with tab_board:
             label_visibility="collapsed"
         )
 
-    tasks = task_manager.load_all_tasks()
+    try:
+        tasks = task_manager.load_all_tasks()
+    except Exception as e:
+        st.error(f"❌ 加载任务列表失败：{e}")
+        tasks = []
 
     # 筛选
     if status_filter != "全部":
@@ -335,7 +353,11 @@ with tab_review:
     if st.button("🔄 刷新", key="refresh_review"):
         st.rerun()
 
-    tasks = task_manager.load_all_tasks()
+    try:
+        tasks = task_manager.load_all_tasks()
+    except Exception as e:
+        st.error(f"❌ 加载任务列表失败：{e}")
+        tasks = []
     pending_tasks = [t for t in tasks if t.get("status") == TaskStatus.PENDING_REVIEW]
 
     # 同时也显示 analyzing 状态，告知用户等待
@@ -450,17 +472,22 @@ with tab_review:
                     with btn2:
                         if st.button(f"🔄 重来", key=f"regen_{task['id']}_{platform}"):
                             with st.spinner(f"正在重新生成 {plat_name} 内容..."):
-                                # 同步调用（单个平台重新生成很快）
-                                import ai_processor
-                                loaded = task_manager.load_task(task["id"])
-                                new_content = ai_processor.regenerate_single(
-                                    loaded["original_content"],
-                                    platform,
-                                    loaded.get("analysis", {})
-                                )
-                                loaded["ai_results"][platform] = new_content
-                                task_manager.save_task(loaded)
-                            st.rerun()
+                                try:
+                                    import ai_processor
+                                    loaded = task_manager.load_task(task["id"])
+                                    if loaded is None:
+                                        st.error("任务文件不存在")
+                                    else:
+                                        new_content = ai_processor.regenerate_single(
+                                            loaded["original_content"],
+                                            platform,
+                                            loaded.get("analysis", {})
+                                        )
+                                        loaded["ai_results"][platform] = new_content
+                                        task_manager.save_task(loaded)
+                                        st.rerun()
+                                except Exception as e:
+                                    st.error(f"重新生成失败：{e}")
 
                     with btn3:
                         if st.button(f"⏭ 跳过", key=f"skip_{task['id']}_{platform}"):
@@ -476,7 +503,11 @@ with tab_review:
                 st.markdown('</div>', unsafe_allow_html=True)
 
             # 检查是否全部平台已处理（通过 or 跳过）
-            review = task_manager.load_task(task["id"]).get("review", {})
+            loaded = task_manager.load_task(task["id"])
+            if loaded is None:
+                st.warning("任务文件已丢失，请刷新")
+                continue
+            review = loaded.get("review", {})
             all_handled = all(v in ("approved", "rejected") for v in review.values())
             any_approved = any(v == "approved" for v in review.values())
 
