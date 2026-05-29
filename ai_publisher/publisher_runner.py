@@ -26,6 +26,7 @@ PUBLISHER_MAP = {
 }
 
 
+
 def run(task_id: str):
     task = task_manager.load_task(task_id)
     if task is None:
@@ -70,7 +71,17 @@ def run(task_id: str):
             )
             continue
 
-        publisher = publisher_cls()
+        # 构造发布器实例
+        try:
+            publisher = publisher_cls()
+        except Exception as e:
+            print(f"[{platform}] 发布器构造失败：{e}")
+            task_manager.update_publish_result(
+                task_id, platform,
+                status=PublishStatus.FAILED,
+                error=f"发布器初始化失败: {e}"
+            )
+            continue
 
         # 检查是否已登录（公众号除外，它每次发布时才扫码）
         if platform != "wechat" and not publisher.is_logged_in():
@@ -83,7 +94,11 @@ def run(task_id: str):
             continue
 
         print(f"[{platform}] 开始发布...")
-        result = publisher._safe_publish(content, abs_images)
+        try:
+            result = publisher._safe_publish(content, abs_images)
+        except Exception as e:
+            print(f"[{platform}] 发布崩溃: {e}")
+            result = {"success": False, "url": None, "error": f"发布异常: {type(e).__name__}: {e}"}
 
         if result["success"]:
             print(f"[{platform}] 发布成功：{result['url']}")
