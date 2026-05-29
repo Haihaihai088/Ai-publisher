@@ -18,6 +18,7 @@ from openai import OpenAI, APIError, APITimeoutError, APIConnectionError
 import config
 from config import TaskStatus
 import task_manager
+from platform_registry import PlatformRegistry
 
 
 # ─────────────────────────────────────────────
@@ -132,32 +133,8 @@ _GENERATE_SYSTEM = """
 只输出合法 JSON，不要任何额外说明。
 """
 
-# 各平台的写作规范（注入到统一 Prompt 中）
-_PLATFORM_SPECS = {
-    "xiaohongshu": """
-小红书规范：
-- title：20字以内，带1-2个 Emoji，制造好奇心或情绪共鸣，不能太广告
-- body：300-500字，段落极短（每段1-3行），段落间空行，穿插 Emoji，结尾自然带入2-4个#话题标签，像真人在分享日常或经验
-- tags：3-5个精准标签（不带#号）""",
-
-    "zhihu": """
-知乎规范：
-- title：问题式或观点式，引发思考，40字以内，不用感叹号
-- body：800-1500字，逻辑严密，可用"**小标题**"分段，语言专业但口语化，可引用数据或案例，结尾给出明确结论，不要"我认为""笔者认为"
-- tags：2-3个知乎话题标签（不带#号）""",
-
-    "tieba": """
-贴吧规范：
-- title：口语化帖子标题，可带疑问或感叹，50字以内
-- body：300-600字，楼主视角，接地气，段落短，开头可用"说真的""来跟大家聊聊"等自然引入，结尾引导其他人跟帖讨论（如"你们怎么看？""有没有同款？"）
-- tags：2-3个相关词（不带#号，用于搜索）""",
-
-    "wechat": """
-公众号规范：
-- title：64字以内，可带数字和情绪词，有悬念感，避免标题党
-- body：800-1200字，结构清晰，用【小标题】分段，语气亲切专业，结尾引导关注或留言，第一段要抓住读者注意力
-（注意：body 中的换行用 \\n 表示）""",
-}
+# _PLATFORM_SPECS 已移除，平台规范现在从 PlatformRegistry 获取
+# 每个 publisher 模块注册时自带 ai_spec 和 output_schema
 
 _GENERATE_PROMPT = """
 原始内容：
@@ -185,17 +162,6 @@ _GENERATE_PROMPT = """
 3. 如有图片描述，在正文中自然融入，不单独说"配图是"
 """
 
-def _build_output_schema(platforms: list[str]) -> str:
-    """构建 JSON 输出结构的示例（用于 Prompt 中说明格式）"""
-    schemas = {
-        "xiaohongshu": '"xiaohongshu": {"title": "...", "body": "...", "tags": [...]}',
-        "zhihu":       '"zhihu": {"title": "...", "body": "...", "tags": [...]}',
-        "tieba":       '"tieba": {"title": "...", "body": "...", "tags": [...]}',
-        "wechat":      '"wechat": {"title": "...", "body": "..."}',
-    }
-    return ",\n".join(schemas[p] for p in platforms if p in schemas)
-
-
 def generate_all(content: str, platforms: list[str], analysis: dict) -> dict:
     """
     批量为所有平台生成内容。
@@ -203,12 +169,9 @@ def generate_all(content: str, platforms: list[str], analysis: dict) -> dict:
     """
     client = _get_client()
 
-    # 只取指定平台的规范
-    platform_specs = "\n".join(
-        f"【{p}】{_PLATFORM_SPECS[p]}"
-        for p in platforms if p in _PLATFORM_SPECS
-    )
-    output_schema = _build_output_schema(platforms)
+    # 从 PlatformRegistry 获取平台规范（替代原来的 _PLATFORM_SPECS + _build_output_schema）
+    platform_specs = PlatformRegistry.get_ai_specs(platforms)
+    output_schema = PlatformRegistry.get_output_schema(platforms)
 
     truncated = content[:2000] if len(content) > 2000 else content
     prompt = _GENERATE_PROMPT.format(
@@ -223,10 +186,13 @@ def generate_all(content: str, platforms: list[str], analysis: dict) -> dict:
 
     result = _call(client, prompt, system=_GENERATE_SYSTEM)
 
-    # 把贴吧的候选吧名从 analysis 注入到 ai_results 里，方便审核时读取
-    if "tieba" in result and "tieba_candidates" in analysis:
-        result["tieba"]["tieba_candidates"] = analysis["tieba_candidates"]
-        result["tieba"]["tieba_selected"] = None  # 等用户审核时选择
+    # 把吧名候选注入到需要 bar_selection 的平台的 ai_results 里
+    if "tieba_candidates" in analysis:
+        for p in platforms:
+            desc = PlatformRegistry.get(p)
+            if desc and desc.has_bar_selection and p in result:
+                result[p]["tieba_candidates"] = analysis["tieba_candidates"]
+                result[p]["tieba_selected"] = None
 
     return result
 
