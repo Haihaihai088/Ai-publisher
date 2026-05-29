@@ -119,6 +119,26 @@ class ZhihuPublisher(BasePublisher):
                 context.browser.close()
 
 
+# ─────────────────────────────────────────────
+# 注册到 PlatformRegistry
+# ─────────────────────────────────────────────
+
+from platform_registry import PlatformRegistry, PlatformDescriptor
+
+PlatformRegistry.register(PlatformDescriptor(
+    key="zhihu",
+    name="知乎",
+    icon="💡",
+    publisher_class=ZhihuPublisher,
+    login_url="https://www.zhihu.com/signin",
+    ai_spec="""
+知乎规范：
+- title：问题式或观点式，引发思考，40字以内，不用感叹号
+- body：800-1500字，逻辑严密，可用"**小标题**"分段，语言专业但口语化，可引用数据或案例，结尾给出明确结论，不要"我认为""笔者认为"
+- tags：2-3个知乎话题标签（不带#号）""",
+    output_schema='"zhihu": {"title": "...", "body": "...", "tags": [...]}',
+))
+
 if __name__ == "__main__":
     pub = ZhihuPublisher()
     if len(sys.argv) > 1 and sys.argv[1] == "login":

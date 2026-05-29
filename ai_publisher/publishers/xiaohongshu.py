@@ -124,6 +124,26 @@ class XiaohongshuPublisher(BasePublisher):
 
 
 # ─────────────────────────────────────────────
+# 注册到 PlatformRegistry
+# ─────────────────────────────────────────────
+
+from platform_registry import PlatformRegistry, PlatformDescriptor
+
+PlatformRegistry.register(PlatformDescriptor(
+    key="xiaohongshu",
+    name="小红书",
+    icon="📕",
+    publisher_class=XiaohongshuPublisher,
+    login_url="https://creator.xiaohongshu.com/login",
+    ai_spec="""
+小红书规范：
+- title：20字以内，带1-2个 Emoji，制造好奇心或情绪共鸣，不能太广告
+- body：300-500字，段落极短（每段1-3行），段落间空行，穿插 Emoji，结尾自然带入2-4个#话题标签，像真人在分享日常或经验
+- tags：3-5个精准标签（不带#号）""",
+    output_schema='"xiaohongshu": {"title": "...", "body": "...", "tags": [...]}',
+))
+
+# ─────────────────────────────────────────────
 # 命令行入口：python publishers/xiaohongshu.py login
 # ─────────────────────────────────────────────
 if __name__ == "__main__":

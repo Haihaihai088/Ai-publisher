@@ -144,6 +144,27 @@ class TiebaPublisher(BasePublisher):
                 context.browser.close()
 
 
+# ─────────────────────────────────────────────
+# 注册到 PlatformRegistry
+# ─────────────────────────────────────────────
+
+from platform_registry import PlatformRegistry, PlatformDescriptor
+
+PlatformRegistry.register(PlatformDescriptor(
+    key="tieba",
+    name="贴吧",
+    icon="🐧",
+    publisher_class=TiebaPublisher,
+    login_url="https://tieba.baidu.com/",
+    has_bar_selection=True,
+    ai_spec="""
+贴吧规范：
+- title：口语化帖子标题，可带疑问或感叹，50字以内
+- body：300-600字，楼主视角，接地气，段落短，开头可用"说真的""来跟大家聊聊"等自然引入，结尾引导其他人跟帖讨论（如"你们怎么看？""有没有同款？"）
+- tags：2-3个相关词（不带#号，用于搜索）""",
+    output_schema='"tieba": {"title": "...", "body": "...", "tags": [...]}',
+))
+
 if __name__ == "__main__":
     pub = TiebaPublisher()
     if len(sys.argv) > 1 and sys.argv[1] == "login":

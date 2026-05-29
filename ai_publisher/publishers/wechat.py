@@ -202,6 +202,35 @@ class WechatPublisher(BasePublisher):
                 browser.close()
 
 
+# ─────────────────────────────────────────────
+# 注册到 PlatformRegistry
+# ─────────────────────────────────────────────
+
+from platform_registry import PlatformRegistry, PlatformDescriptor
+
+PlatformRegistry.register(PlatformDescriptor(
+    key="wechat",
+    name="公众号",
+    icon="📰",
+    publisher_class=WechatPublisher,
+    login_url="https://mp.weixin.qq.com/",
+    needs_manual_scan=True,
+    skip_login_check=True,
+    has_tags=False,
+    needs_warning_in_review=True,
+    sidebar_btn_label="配置",
+    logged_in_label="已配置",
+    login_message="已打开公众号后台，完成扫码后点上方'配置'可验证状态",
+    review_warning="公众号发布时需要微信扫码，点击\"通过\"即表示您确认届时会进行扫码操作",
+    cookie_suffix="wechat_configured",
+    ai_spec="""
+公众号规范：
+- title：64字以内，可带数字和情绪词，有悬念感，避免标题党
+- body：800-1200字，结构清晰，用【小标题】分段，语气亲切专业，结尾引导关注或留言，第一段要抓住读者注意力
+（注意：body 中的换行用 \\n 表示）""",
+    output_schema='"wechat": {"title": "...", "body": "..."}',
+))
+
 if __name__ == "__main__":
     pub = WechatPublisher()
     if len(sys.argv) > 1 and sys.argv[1] == "login":
