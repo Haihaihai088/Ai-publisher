@@ -98,13 +98,13 @@ class TestTaskManager(unittest.TestCase):
         loaded = self.tm.load_task(task["id"])
         self.assertEqual(loaded["review"]["zhihu"], "rejected")
 
-    def test_set_tieba_selection(self):
+    def test_set_platform_extra_field(self):
         task = self.tm.create_task("贴吧测试", ["tieba"], [])
         # 先要有 ai_results
         self.tm.update_ai_results(task["id"],
                                    {"topic": "x"},
                                    {"tieba": {"title": "", "body": "", "tags": []}})
-        self.tm.set_tieba_selection(task["id"], "数码")
+        self.tm.set_platform_extra_field(task["id"], "tieba", "tieba_selected", "数码")
         loaded = self.tm.load_task(task["id"])
         self.assertEqual(loaded["ai_results"]["tieba"]["tieba_selected"], "数码")
 
