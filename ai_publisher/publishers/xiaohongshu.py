@@ -30,11 +30,11 @@ class XiaohongshuPublisher(BasePublisher):
     def _wait_for_login(self, page, context) -> bool:
         print("请用小红书 App 扫描页面上的二维码...")
         try:
-            page.wait_for_url("**/creator.xiaohongshu.com/**", timeout=120_000)
-            # 确保不再是登录页
+            # 等待 URL 离开登录页（不要用 wait_for_url **/creator.xiaohongshu.com/**
+            # 因为登录页本身就在该域名下，会立即匹配）
             page.wait_for_function(
                 "() => !window.location.href.includes('/login')",
-                timeout=30_000
+                timeout=120_000
             )
             return True
         except PWTimeout:
