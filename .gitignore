@@ -26,3 +26,6 @@ Thumbs.db
 
 # Playwright browsers
 .playwright/
+
+# Archives
+*.zip
