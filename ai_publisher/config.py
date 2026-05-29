@@ -83,3 +83,27 @@ class PublishStatus:
 BROWSER_HEADLESS = False          # 发布时展示浏览器（方便调试和扫码）
 BROWSER_SLOW_MO  = 500            # 操作间隔毫秒，太快容易被风控
 PUBLISH_TIMEOUT  = 60_000         # 发布超时：60秒
+
+# ─────────────────────────────────────────────
+# 配置校验
+# ─────────────────────────────────────────────
+
+def validate_config():
+    """
+    启动时校验必需配置项，提前发现配置问题，避免运行到一半才报错。
+    返回 (ok, errors) 元组。
+    """
+    errors = []
+
+    if not AI_API_KEY:
+        errors.append("缺少 OPENAI_API_KEY：请在 .env 文件中设置")
+
+    if not AI_BASE_URL:
+        errors.append("缺少 OPENAI_BASE_URL")
+    elif not AI_BASE_URL.startswith(("http://", "https://")):
+        errors.append(f"OPENAI_BASE_URL 格式非法: {AI_BASE_URL}")
+
+    if not AI_MODEL:
+        errors.append("缺少 OPENAI_MODEL：请在 .env 文件中设置模型名")
+
+    return len(errors) == 0, errors
