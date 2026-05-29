@@ -24,13 +24,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import config
 import task_manager
-from config import TaskStatus, PublishStatus, STATUS_LABELS, PLATFORM_KEYS
-from publishers import (
-    XiaohongshuPublisher,
-    ZhihuPublisher,
-    TiebaPublisher,
-    WechatPublisher,
-)
+from config import TaskStatus, PublishStatus, STATUS_LABELS
+from platform_registry import PlatformRegistry
 
 # ─────────────────────────────────────────────
 # 页面基础配置
@@ -82,17 +77,14 @@ if not ok:
     st.stop()
 
 # ─────────────────────────────────────────────
-# 发布器实例（用于登录状态检测）
+# 确保所有平台已注册（副作用导入）
 # ─────────────────────────────────────────────
 
-PUBLISHERS = {
-    "xiaohongshu": XiaohongshuPublisher(),
-    "zhihu":       ZhihuPublisher(),
-    "tieba":       TiebaPublisher(),
-    "wechat":      WechatPublisher(),
-}
+import publishers as _pubs  # noqa: E402,F401
 
-PLATFORM_DISPLAY = {v: k for k, v in PLATFORM_KEYS.items()}  # key → 显示名
+# key → 显示名的便捷函数
+def _platform_name(key: str) -> str:
+    return PlatformRegistry.key_to_name(key)
 
 
 # ─────────────────────────────────────────────
@@ -104,27 +96,24 @@ with st.sidebar:
     st.divider()
     st.subheader("👤 账号管理")
 
-    for key, pub in PUBLISHERS.items():
-        name = PLATFORM_DISPLAY.get(key, key)
+    for key, desc in PlatformRegistry.items():
+        if desc.key == "mock":
+            continue  # 模拟发布不显示在侧边栏
+        name = desc.name
+        pub = desc.publisher_class()
         logged_in = pub.is_logged_in()
 
         col1, col2 = st.columns([2, 1])
         with col1:
             if logged_in:
-                if key == "wechat":
-                    st.success(f"✅ {name} 已配置")
-                else:
-                    st.success(f"✅ {name} 已登录")
+                st.success(f"✅ {name} {desc.logged_in_label}")
             else:
                 st.error(f"❌ {name} 未登录")
         with col2:
-            btn_label = "配置" if key == "wechat" else "登录"
-            if st.button(btn_label, key=f"login_{key}"):
+            if st.button(desc.sidebar_btn_label, key=f"login_{key}"):
                 pub.start_login_subprocess()
-                if key == "wechat":
-                    st.info("已打开公众号后台，完成扫码后点上方'配置'可验证状态")
-                else:
-                    st.info(f"已打开{name}登录窗口，请扫码后等待浏览器自动关闭")
+                msg = desc.login_message or f"已打开{name}登录窗口，请扫码后等待浏览器自动关闭"
+                st.info(msg)
 
     st.divider()
     if st.button("🔄 刷新登录状态"):
@@ -184,19 +173,23 @@ with tab_new:
                 with preview_cols[i]:
                     st.image(img, use_column_width=True)
 
-        # 平台选择
+        # 平台选择（从注册表动态生成）
         st.markdown("**🎯 选择发布平台**")
-        plat_xhs   = st.checkbox("📕 小红书", value=True)
-        plat_zhihu = st.checkbox("💡 知乎", value=True)
-        plat_tieba = st.checkbox("🐧 贴吧", value=False)
-        plat_wechat = st.checkbox("📰 公众号", value=False)
-
-        if plat_wechat:
-            st.markdown(
-                '<div class="warn-box">⚠️ 公众号每次发布都需要微信扫码，'
-                '发布时会打开浏览器等待您扫码</div>',
-                unsafe_allow_html=True
+        platform_selections = {}
+        for key, desc in PlatformRegistry.items():
+            if key == "mock" and not config.SIMULATED_MODE:
+                continue  # 非模拟模式下隐藏模拟发布
+            default_on = key in ("xiaohongshu", "zhihu")
+            platform_selections[key] = st.checkbox(
+                f"{desc.icon} {desc.name}",
+                value=default_on
             )
+            # 需要手动扫码的平台显示警告
+            if platform_selections[key] and desc.needs_warning_in_review and desc.review_warning:
+                st.markdown(
+                    f'<div class="warn-box">⚠️ {desc.review_warning}</div>',
+                    unsafe_allow_html=True
+                )
 
     # 提交按钮
     st.divider()
@@ -206,11 +199,7 @@ with tab_new:
             st.error("请先输入或上传内容")
             st.stop()
 
-        selected_platforms = []
-        if plat_xhs:    selected_platforms.append("xiaohongshu")
-        if plat_zhihu:  selected_platforms.append("zhihu")
-        if plat_tieba:  selected_platforms.append("tieba")
-        if plat_wechat: selected_platforms.append("wechat")
+        selected_platforms = [k for k, v in platform_selections.items() if v]
 
         if not selected_platforms:
             st.error("请至少选择一个平台")
@@ -290,7 +279,7 @@ with tab_board:
             status_label = STATUS_LABELS.get(status, status)
             created = task.get("created_at", "")[:16].replace("T", " ")
             platforms_str = " / ".join(
-                PLATFORM_DISPLAY.get(p, p) for p in task.get("platforms", [])
+                _platform_name(p) for p in task.get("platforms", [])
             )
             content_preview = task.get("original_content", "")[:60].replace("\n", " ")
 
@@ -312,7 +301,7 @@ with tab_board:
                 if task.get("publish_results"):
                     st.markdown("**发布结果：**")
                     for plat, res in task["publish_results"].items():
-                        plat_name = PLATFORM_DISPLAY.get(plat, plat)
+                        plat_name = _platform_name(plat)
                         pstatus = res.get("status", "")
                         if pstatus == PublishStatus.SUCCESS:
                             url = res.get("url", "")
@@ -379,16 +368,16 @@ with tab_review:
 
             # 逐平台展示
             for platform in platforms:
-                plat_name = PLATFORM_DISPLAY.get(platform, platform)
+                desc = PlatformRegistry.get(platform)
+                plat_name = desc.name if desc else platform
                 content = ai_results.get(platform, {})
                 is_approved = review_state.get(platform) == "approved"
-                is_wechat = platform == "wechat"
 
                 # 平台卡片
                 st.markdown(f'<div class="platform-card">', unsafe_allow_html=True)
                 header_col, status_col = st.columns([4, 1])
                 with header_col:
-                    icon = {"xiaohongshu": "📕", "zhihu": "💡", "tieba": "🐧", "wechat": "📰"}.get(platform, "📄")
+                    icon = desc.icon if desc else "📄"
                     st.markdown(f"### {icon} {plat_name}")
                 with status_col:
                     if is_approved:
@@ -396,38 +385,41 @@ with tab_review:
                     else:
                         st.warning("⏳ 待审核")
 
-                # 公众号扫码提醒
-                if is_wechat and not is_approved:
+                # 手动扫码/额外警告
+                if desc and desc.needs_warning_in_review and not is_approved:
+                    warning = desc.review_warning or "该平台发布时需要额外确认"
                     st.markdown(
-                        '<div class="warn-box">⚠️ 公众号发布时需要微信扫码，'
-                        '点击"通过"即表示您确认届时会进行扫码操作</div>',
+                        f'<div class="warn-box">⚠️ {warning}</div>',
                         unsafe_allow_html=True
                     )
 
-                # 贴吧吧名选择
-                if platform == "tieba" and not is_approved:
+                # 社区/吧名选择
+                if desc and desc.has_bar_selection and not is_approved:
                     candidates = content.get("tieba_candidates", [])
                     current_selection = content.get("tieba_selected")
 
                     if candidates:
                         selected_bar = st.radio(
-                            "📍 选择发布到哪个贴吧（AI推荐）",
+                            "📍 选择发布到哪个社区（AI推荐）",
                             options=candidates,
                             index=candidates.index(current_selection) if current_selection in candidates else 0,
                             horizontal=True,
-                            key=f"tieba_bar_{task['id']}"
+                            key=f"bar_select_{task['id']}_{platform}"
                         )
-                        # 实时写入选择
                         if selected_bar != current_selection:
-                            task_manager.set_tieba_selection(task["id"], selected_bar)
+                            task_manager.set_platform_extra_field(
+                                task["id"], platform, "tieba_selected", selected_bar
+                            )
                     else:
                         custom_bar = st.text_input(
-                            '输入目标贴吧名称（不含"吧"字）',
+                            "输入目标社区名称",
                             value=current_selection or "",
-                            key=f"tieba_custom_{task['id']}"
+                            key=f"bar_custom_{task['id']}_{platform}"
                         )
                         if custom_bar:
-                            task_manager.set_tieba_selection(task["id"], custom_bar)
+                            task_manager.set_platform_extra_field(
+                                task["id"], platform, "tieba_selected", custom_bar
+                            )
 
                 # 可编辑的标题
                 edited_title = st.text_input(
@@ -513,7 +505,7 @@ with tab_review:
 
             if all_handled and any_approved:
                 st.divider()
-                approved_names = [PLATFORM_DISPLAY.get(p, p) for p, v in review.items() if v == "approved"]
+                approved_names = [_platform_name(p) for p, v in review.items() if v == "approved"]
                 st.info(f"✅ 以下平台已通过审核，可以发布：{', '.join(approved_names)}")
 
                 if st.button(f"🚀 开始发布", type="primary", key=f"publish_{task['id']}"):
