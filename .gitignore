@@ -12,8 +12,8 @@ build/
 venv/
 
 # Runtime data
-data/tasks/
-data/cookies/
+ai_publisher/data/tasks/
+ai_publisher/data/cookies/
 
 # IDE
 .idea/
