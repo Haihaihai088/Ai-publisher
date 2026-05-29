@@ -46,26 +46,76 @@
 
 ## 快速开始
 
+### 方式一：一键脚本（推荐）
+
+```bash
+cd ai_publisher
+
+# 首次使用：安装依赖 + 浏览器 + 配置
+./install.sh
+# 按提示编辑 .env 文件，填入 OPENAI_API_KEY
+
+# 日常启动
+./start.sh
+# 浏览器打开 http://localhost:8080
+```
+
+### 方式二：手动安装
+
 ```bash
 # 1. 安装依赖
 pip install -r ai_publisher/requirements.txt
 
-# 2. 安装 Playwright 浏览器
+# 2. 安装 Playwright Chromium
 playwright install chromium
 
-# 3. 配置环境变量
+# 3. 配置
 cp ai_publisher/.env.example ai_publisher/.env
-# 编辑 .env，填入 OPENAI_API_KEY 等必要配置
+# 编辑 .env：
+#   OPENAI_API_KEY=sk-your-key-here
+#   OPENAI_BASE_URL=https://api.deepseek.com/v1   （默认 DeepSeek）
+#   OPENAI_MODEL=deepseek-chat
 
-# 4. 启动 Streamlit 界面
-streamlit run ai_publisher/app.py
+# 4. 启动
+cd ai_publisher && streamlit run app.py --server.port 8080
+```
+
+## 使用流程
+
+```
+1. 新建任务  →  粘贴内容 + 选择平台 + 上传图片
+2. AI 处理   →  自动分析内容 + 生成各平台适配文案（后台子进程）
+3. 审核队列  →  逐平台审查/编辑标题正文/选贴吧吧名
+4. 一键发布  →  Playwright 自动打开浏览器发布
+5. 任务看板  →  查看发布结果和链接
 ```
 
 ## 平台支持
 
-| 平台 | 状态 | 说明 |
-|------|------|------|
-| 小红书 | 开发中 | 图文发布 |
-| 知乎 | 开发中 | 文章/回答发布 |
-| 贴吧 | 开发中 | 帖子发布 |
-| 微信公众号 | 开发中 | 文章发布 |
+| 平台 | 发布方式 | Cookie 持久化 | 说明 |
+|------|---------|-------------|------|
+| 小红书 | 创作者平台图文发布 | 扫码一次，长期有效 | 自动追加话题标签，最多20字标题 |
+| 知乎 | 专栏文章发布 | 扫码一次，长期有效 | 含 Cookie 过期检测，支持 Draft.js 编辑器 |
+| 贴吧 | 百度贴吧发帖 | 扫码一次，长期有效 | AI 推荐候选吧名，兼容新旧版编辑器 |
+| 微信公众号 | 后台文章发布 | 每次发布均需扫码 | 因 mp.weixin.qq.com 强制微信扫码 |
+
+## 常见问题
+
+### 启动报错 "缺少 OPENAI_API_KEY"
+`.env` 文件中未配置 API Key。确认 `ai_publisher/.env` 存在且 `OPENAI_API_KEY` 不为空。
+
+### 登录后发布仍然提示"未登录"
+Cookie 文件可能损坏或过期。在侧边栏重新点击"登录"，扫码后等待浏览器自动关闭。
+
+### 发布超时
+网络环境或被检测为自动化时可能超时。可调整 `config.py` 中 `BROWSER_SLOW_MO`（默认500ms）增加操作间隔。
+
+### 子进程无响应
+AI 处理或发布子进程可能卡死。手动删除 `data/tasks/` 中的 `.lock` 文件和对应任务 `.json` 文件即可恢复。
+
+### DeepSeek vs OpenAI
+默认使用 DeepSeek（便宜、中文效果好）。可在 `.env` 中改为 OpenAI：
+```bash
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+```
