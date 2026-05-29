@@ -11,19 +11,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import task_manager
 from config import TaskStatus, PublishStatus, DATA_DIR
-from publishers import (
-    XiaohongshuPublisher,
-    ZhihuPublisher,
-    TiebaPublisher,
-    WechatPublisher,
-)
+from platform_registry import PlatformRegistry
 
-PUBLISHER_MAP = {
-    "xiaohongshu": XiaohongshuPublisher,
-    "zhihu":       ZhihuPublisher,
-    "tieba":       TiebaPublisher,
-    "wechat":      WechatPublisher,
-}
+# 确保所有平台已注册（副作用导入）
+import publishers as _pubs  # noqa: F401
 
 
 
@@ -60,9 +51,9 @@ def run(task_id: str):
             continue
 
         content = ai_results.get(platform, {})
-        publisher_cls = PUBLISHER_MAP.get(platform)
+        desc = PlatformRegistry.get(platform)
 
-        if publisher_cls is None:
+        if desc is None or desc.publisher_class is None:
             print(f"[{platform}] 未找到发布器，跳过")
             task_manager.update_publish_result(
                 task_id, platform,
@@ -73,7 +64,7 @@ def run(task_id: str):
 
         # 构造发布器实例
         try:
-            publisher = publisher_cls()
+            publisher = desc.publisher_class()
         except Exception as e:
             print(f"[{platform}] 发布器构造失败：{e}")
             task_manager.update_publish_result(
@@ -83,8 +74,8 @@ def run(task_id: str):
             )
             continue
 
-        # 检查是否已登录（公众号除外，它每次发布时才扫码）
-        if platform != "wechat" and not publisher.is_logged_in():
+        # 检查是否已登录（跳过不需要登录检查的平台，如公众号、模拟发布）
+        if not desc.skip_login_check and not publisher.is_logged_in():
             print(f"[{platform}] 未登录，跳过")
             task_manager.update_publish_result(
                 task_id, platform,
