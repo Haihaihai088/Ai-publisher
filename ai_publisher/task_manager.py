@@ -6,8 +6,10 @@
 #   Streamlit 通过轮询文件来感知状态变更，不共享内存
 
 import json
+import os
+import time
 import uuid
-import shutil
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -89,6 +91,38 @@ def _atomic_write(path: Path, data: dict):
     tmp.rename(path)
 
 
+def _lock_path(task_id: str) -> Path:
+    return TASKS_DIR / f"{task_id}.lock"
+
+
+@contextmanager
+def _task_lock(task_id: str, timeout: float = 5.0):
+    """
+    任务文件锁，防止多进程（Streamlit + AI 子进程 + 发布子进程）同时修改同一文件。
+
+    使用 O_CREAT | O_EXCL 创建锁文件，该操作在操作系统层面是原子的，
+    跨平台兼容（Windows/Linux/macOS）。
+    """
+    lock = _lock_path(task_id)
+    start = time.time()
+    while True:
+        try:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            os.close(fd)
+            break
+        except FileExistsError:
+            if time.time() - start > timeout:
+                raise TimeoutError(f"无法获取任务 {task_id} 的文件锁（超时 {timeout}s）")
+            time.sleep(0.05)
+    try:
+        yield
+    finally:
+        try:
+            lock.unlink()
+        except FileNotFoundError:
+            pass  # 另一个进程可能已经释放了
+
+
 # ─────────────────────────────────────────────
 # 公共 API
 # ─────────────────────────────────────────────
@@ -153,24 +187,26 @@ def load_all_tasks(sort_by_newest: bool = True) -> list[dict]:
 
 def update_status(task_id: str, status: str, error: str = None):
     """仅更新任务状态（轻量操作，频繁调用用这个）"""
-    task = load_task(task_id)
-    if task is None:
-        return
-    task["status"] = status
-    if error is not None:
-        task["error"] = error
-    save_task(task)
+    with _task_lock(task_id):
+        task = load_task(task_id)
+        if task is None:
+            return
+        task["status"] = status
+        if error is not None:
+            task["error"] = error
+        save_task(task)
 
 
 def update_ai_results(task_id: str, analysis: dict, ai_results: dict):
     """AI处理完成后，写入分析结果和各平台内容"""
-    task = load_task(task_id)
-    if task is None:
-        return
-    task["analysis"] = analysis
-    task["ai_results"] = ai_results
-    task["status"] = TaskStatus.PENDING_REVIEW
-    save_task(task)
+    with _task_lock(task_id):
+        task = load_task(task_id)
+        if task is None:
+            return
+        task["analysis"] = analysis
+        task["ai_results"] = ai_results
+        task["status"] = TaskStatus.PENDING_REVIEW
+        save_task(task)
 
 
 def approve_platform(task_id: str, platform: str, edited_content: Optional[dict] = None):
@@ -178,54 +214,58 @@ def approve_platform(task_id: str, platform: str, edited_content: Optional[dict]
     审核通过某个平台。
     edited_content: 用户在审核界面修改后的内容（如果有），会覆盖 AI 生成的内容。
     """
-    task = load_task(task_id)
-    if task is None:
-        return
-    task["review"][platform] = "approved"
-    if edited_content and task["ai_results"]:
-        task["ai_results"][platform].update(edited_content)
-    save_task(task)
+    with _task_lock(task_id):
+        task = load_task(task_id)
+        if task is None:
+            return
+        task["review"][platform] = "approved"
+        if edited_content and task["ai_results"]:
+            task["ai_results"][platform].update(edited_content)
+        save_task(task)
 
 
 def reject_platform(task_id: str, platform: str):
     """审核拒绝（标记为需要重新生成）"""
-    task = load_task(task_id)
-    if task is None:
-        return
-    task["review"][platform] = "rejected"
-    save_task(task)
+    with _task_lock(task_id):
+        task = load_task(task_id)
+        if task is None:
+            return
+        task["review"][platform] = "rejected"
+        save_task(task)
 
 
 def set_tieba_selection(task_id: str, selected_bar: str):
     """用户在审核时选择了贴吧的目标吧名"""
-    task = load_task(task_id)
-    if task is None or not task.get("ai_results"):
-        return
-    if "tieba" in task["ai_results"]:
-        task["ai_results"]["tieba"]["tieba_selected"] = selected_bar
-    save_task(task)
+    with _task_lock(task_id):
+        task = load_task(task_id)
+        if task is None or not task.get("ai_results"):
+            return
+        if "tieba" in task["ai_results"]:
+            task["ai_results"]["tieba"]["tieba_selected"] = selected_bar
+        save_task(task)
 
 
 def update_publish_result(task_id: str, platform: str, status: str,
                            url: str = None, error: str = None):
     """更新某平台的发布结果"""
-    task = load_task(task_id)
-    if task is None:
-        return
-    task["publish_results"][platform] = {
-        "status": status,
-        "url": url,
-        "error": error,
-        "published_at": _now() if status == PublishStatus.SUCCESS else None,
-    }
-    # 检查是否全部完成
-    all_results = list(task["publish_results"].values())
-    all_done = all(r["status"] in (PublishStatus.SUCCESS, PublishStatus.FAILED, PublishStatus.SKIPPED)
-                   for r in all_results)
-    if all_done:
-        any_success = any(r["status"] == PublishStatus.SUCCESS for r in all_results)
-        task["status"] = TaskStatus.COMPLETED if any_success else TaskStatus.FAILED
-    save_task(task)
+    with _task_lock(task_id):
+        task = load_task(task_id)
+        if task is None:
+            return
+        task["publish_results"][platform] = {
+            "status": status,
+            "url": url,
+            "error": error,
+            "published_at": _now() if status == PublishStatus.SUCCESS else None,
+        }
+        # 检查是否全部完成
+        all_results = list(task["publish_results"].values())
+        all_done = all(r["status"] in (PublishStatus.SUCCESS, PublishStatus.FAILED, PublishStatus.SKIPPED)
+                       for r in all_results)
+        if all_done:
+            any_success = any(r["status"] == PublishStatus.SUCCESS for r in all_results)
+            task["status"] = TaskStatus.COMPLETED if any_success else TaskStatus.FAILED
+        save_task(task)
 
 
 def is_all_approved(task: dict) -> bool:
@@ -234,7 +274,8 @@ def is_all_approved(task: dict) -> bool:
 
 
 def delete_task(task_id: str):
-    """删除任务文件"""
-    path = _task_path(task_id)
-    if path.exists():
-        path.unlink()
+    """删除任务文件（含锁文件清理）"""
+    with _task_lock(task_id):
+        path = _task_path(task_id)
+        if path.exists():
+            path.unlink()
