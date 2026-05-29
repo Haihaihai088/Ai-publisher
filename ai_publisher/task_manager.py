@@ -85,10 +85,10 @@ def _task_path(task_id: str) -> Path:
 
 
 def _atomic_write(path: Path, data: dict):
-    """原子写入：先写 .tmp 文件，再 rename，防止写一半时崩溃导致文件损坏"""
+    """原子写入：先写 .tmp 文件，再 os.replace，防止写一半时崩溃导致文件损坏。os.replace 跨平台原子替换（Windows 也支持）。"""
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp.rename(path)
+    os.replace(str(tmp), str(path))
 
 
 def _lock_path(task_id: str) -> Path:
