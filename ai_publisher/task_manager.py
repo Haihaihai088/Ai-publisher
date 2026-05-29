@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from config import TASKS_DIR, TaskStatus, PublishStatus, PLATFORM_KEYS
+from config import TASKS_DIR, TaskStatus, PublishStatus
 
 
 # ─────────────────────────────────────────────
@@ -234,14 +234,14 @@ def reject_platform(task_id: str, platform: str):
         save_task(task)
 
 
-def set_tieba_selection(task_id: str, selected_bar: str):
-    """用户在审核时选择了贴吧的目标吧名"""
+def set_platform_extra_field(task_id: str, platform: str, field_name: str, value):
+    """设置某平台 ai_results 中的额外字段（如贴吧吧名选择等）"""
     with _task_lock(task_id):
         task = load_task(task_id)
         if task is None or not task.get("ai_results"):
             return
-        if "tieba" in task["ai_results"]:
-            task["ai_results"]["tieba"]["tieba_selected"] = selected_bar
+        if platform in task["ai_results"]:
+            task["ai_results"][platform][field_name] = value
         save_task(task)
 
 
