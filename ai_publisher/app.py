@@ -120,6 +120,16 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
+    st.subheader("🧪 调试")
+    simulated = st.toggle(
+        "模拟发布模式",
+        value=config.SIMULATED_MODE,
+        help="启用后所有发布操作为模拟，不打开真实浏览器"
+    )
+    # 同步到 registry（控制 MockPublisher 是否可见等）
+    PlatformRegistry.simulated_mode = simulated
+
+    st.divider()
     st.caption(f"AI 模型：{config.AI_MODEL}")
     st.caption(f"API：{config.AI_BASE_URL}")
 
@@ -177,7 +187,7 @@ with tab_new:
         st.markdown("**🎯 选择发布平台**")
         platform_selections = {}
         for key, desc in PlatformRegistry.items():
-            if key == "mock" and not config.SIMULATED_MODE:
+            if key == "mock" and not PlatformRegistry.simulated_mode:
                 continue  # 非模拟模式下隐藏模拟发布
             default_on = key in ("xiaohongshu", "zhihu")
             platform_selections[key] = st.checkbox(
