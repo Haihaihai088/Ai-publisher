@@ -22,6 +22,18 @@ class BasePublisher(ABC):
     platform_name: str = ""      # 如 "小红书"
     login_url: str = ""          # 扫码登录页 URL
 
+    # 平台能力属性（子类按需覆盖）
+    needs_manual_scan: bool = False     # 每次发布都需要扫码
+    skip_login_check: bool = False      # 不检查 is_logged_in()
+    has_tags: bool = True               # AI 输出中包含 tags 字段
+    has_bar_selection: bool = False     # 发布前需要用户选择社区/吧名
+    needs_warning_in_review: bool = False  # 审核队列中显示额外警告
+    review_warning: str = ""             # 审核队列警告文案
+    icon: str = "📄"                    # UI 中显示的图标
+    sidebar_btn_label: str = "登录"     # 侧边栏按钮文案
+    logged_in_label: str = "已登录"     # 已登录状态文案
+    login_message: str = ""             # 登录提示信息
+
     def __init__(self):
         self.cookie_path: Path = config.get_cookie_path(self.platform_key)
 

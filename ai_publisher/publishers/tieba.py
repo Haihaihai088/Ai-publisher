@@ -19,9 +19,11 @@ import config
 
 
 class TiebaPublisher(BasePublisher):
-    platform_key  = "tieba"
-    platform_name = "贴吧"
-    login_url     = "https://tieba.baidu.com/"
+    platform_key      = "tieba"
+    platform_name     = "贴吧"
+    login_url         = "https://tieba.baidu.com/"
+    icon              = "🐧"
+    has_bar_selection = True
 
     # ─────────────────────────────────────────
     # 登录：百度账号扫码

@@ -21,6 +21,7 @@ class ZhihuPublisher(BasePublisher):
     platform_key  = "zhihu"
     platform_name = "知乎"
     login_url     = "https://www.zhihu.com/signin"
+    icon          = "💡"
 
     # ─────────────────────────────────────────
     # 登录：等待跳转离开登录页

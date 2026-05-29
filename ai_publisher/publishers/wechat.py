@@ -25,9 +25,18 @@ import config
 
 
 class WechatPublisher(BasePublisher):
-    platform_key  = "wechat"
-    platform_name = "公众号"
-    login_url     = "https://mp.weixin.qq.com/"
+    platform_key      = "wechat"
+    platform_name     = "公众号"
+    login_url         = "https://mp.weixin.qq.com/"
+    icon              = "📰"
+    needs_manual_scan = True
+    skip_login_check  = True
+    has_tags          = False
+    needs_warning_in_review = True
+    sidebar_btn_label = "配置"
+    logged_in_label   = "已配置"
+    login_message     = "已打开公众号后台，完成扫码后点上方'配置'可验证状态"
+    review_warning    = "公众号发布时需要微信扫码，点击"通过"即表示您确认届时会进行扫码操作"
 
     # 公众号每次都需要扫码，不依赖 Cookie
     def is_logged_in(self) -> bool:

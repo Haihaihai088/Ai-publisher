@@ -22,6 +22,7 @@ class XiaohongshuPublisher(BasePublisher):
     platform_key  = "xiaohongshu"
     platform_name = "小红书"
     login_url     = "https://creator.xiaohongshu.com/login"
+    icon          = "📕"
 
     # ─────────────────────────────────────────
     # 登录：等待跳转到首页判断登录成功
