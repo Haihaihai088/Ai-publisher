@@ -416,7 +416,7 @@ with tab_review:
                 )
 
                 # 可编辑的正文
-                body_key = "script" if platform == "douyin" else "body"
+                body_key = "body"
                 edited_body = st.text_area(
                     "正文",
                     value=content.get(body_key, ""),
