@@ -422,7 +422,7 @@ with tab_review:
                             task_manager.set_tieba_selection(task["id"], selected_bar)
                     else:
                         custom_bar = st.text_input(
-                            "输入目标贴吧名称（不含"吧"字）",
+                            '输入目标贴吧名称（不含"吧"字）',
                             value=current_selection or "",
                             key=f"tieba_custom_{task['id']}"
                         )
