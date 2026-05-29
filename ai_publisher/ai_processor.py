@@ -11,8 +11,9 @@
 #   - 所有 Prompt 都内联在此文件，方便调优
 
 import json
+import time
 import subprocess
-from openai import OpenAI
+from openai import OpenAI, APIError, APITimeoutError, APIConnectionError
 
 import config
 from config import TaskStatus
@@ -29,23 +30,56 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=config.AI_API_KEY, base_url=config.AI_BASE_URL)
 
 
-def _call(client: OpenAI, prompt: str, system: str = None) -> dict:
-    """封装一次 AI 调用，返回解析后的 JSON dict"""
+def _call(client: OpenAI, prompt: str, system: str = None, max_retries: int = 3) -> dict:
+    """
+    封装一次 AI 调用，返回解析后的 JSON dict。
+
+    防护点：
+    - 90秒超时，防止 API 无响应导致子进程永久阻塞
+    - 自动重试（指数退避），处理间歇性网络波动
+    - JSON 解析失败时携带原始返回片段，方便排查
+    - 区分 API 错误（超时/限流/连接失败）并给出明确提示
+    """
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
-    resp = client.chat.completions.create(
-        model=config.AI_MODEL,
-        messages=messages,
-        response_format={"type": "json_object"},
-        temperature=0.7,
-    )
-    raw = resp.choices[0].message.content
-    # 防御：有些模型会在 json_object 模式下仍然加 ```json 包裹
-    raw = raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-    return json.loads(raw)
+    last_error = ""
+    for attempt in range(1, max_retries + 1):
+        try:
+            resp = client.chat.completions.create(
+                model=config.AI_MODEL,
+                messages=messages,
+                response_format={"type": "json_object"},
+                temperature=0.7,
+                timeout=90,
+            )
+            raw = resp.choices[0].message.content
+            if not raw:
+                raise ValueError("AI 返回了空内容")
+
+            # 防御：有些模型会在 json_object 模式下仍然加 ```json 包裹
+            raw = raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+            return json.loads(raw)
+
+        except json.JSONDecodeError as e:
+            snippet = raw[:200] if 'raw' in dir() and raw else "(无内容)"
+            last_error = f"JSON 解析失败(第{attempt}次): {e}\n返回片段: {snippet}"
+        except APITimeoutError:
+            last_error = f"API 超时(第{attempt}次): 90秒内未返回结果"
+        except APIConnectionError:
+            last_error = f"API 连接失败(第{attempt}次): 无法连接到 {config.AI_BASE_URL}"
+        except APIError as e:
+            last_error = f"API 错误(第{attempt}次): {e}"
+        except Exception as e:
+            last_error = f"AI 调用失败(第{attempt}次): {type(e).__name__}: {e}"
+
+        if attempt < max_retries:
+            wait = 2 ** attempt  # 2s, 4s, 8s
+            time.sleep(wait)
+
+    raise RuntimeError(f"AI 调用经过 {max_retries} 次重试后仍然失败:\n{last_error}")
 
 
 # ─────────────────────────────────────────────
