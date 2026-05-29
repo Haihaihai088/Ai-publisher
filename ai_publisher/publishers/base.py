@@ -94,6 +94,7 @@ class BasePublisher(ABC):
         """
         同步登录（在子进程里直接调用）：
         打开浏览器 → 等用户扫码 → 保存 Cookie → 关闭浏览器
+        只有 _wait_for_login 返回 True 才保存 Cookie，避免超时后空文件误判为已登录
         """
         with sync_playwright() as p:
             browser = p.chromium.launch(
@@ -108,20 +109,26 @@ class BasePublisher(ABC):
             page.goto(self.login_url, wait_until="domcontentloaded")
 
             # 各平台可以覆盖此方法，处理特殊登录逻辑
-            self._wait_for_login(page, context)
-
-            # 保存 Cookie
-            cookies = context.cookies()
-            self.save_cookies(cookies)
-            print(f"[{self.platform_name}] 登录成功，Cookie 已保存")
+            if self._wait_for_login(page, context):
+                cookies = context.cookies()
+                self.save_cookies(cookies)
+                print(f"[{self.platform_name}] 登录成功，Cookie 已保存")
+            else:
+                print(f"[{self.platform_name}] 登录未完成，Cookie 未保存")
             browser.close()
 
-    def _wait_for_login(self, page: Page, context: BrowserContext):
+    def _wait_for_login(self, page: Page, context: BrowserContext) -> bool:
         """
         等待用户完成登录。子类可以覆盖此方法检测特定元素。
         默认：等待用户按 Enter（终端运行时有效）
+        返回 True 表示登录成功，False 表示失败/超时
         """
-        input(f"\n请在浏览器中完成{self.platform_name}扫码登录，完成后在此按 Enter...\n")
+        try:
+            input(f"\n请在浏览器中完成{self.platform_name}扫码登录，完成后在此按 Enter...\n")
+            return True
+        except (EOFError, OSError):
+            print(f"\n无终端交互，无法等待用户确认，登录未完成")
+            return False
 
     # ─────────────────────────────────────────
     # 发布接口（子类实现）

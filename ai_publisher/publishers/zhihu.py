@@ -26,7 +26,7 @@ class ZhihuPublisher(BasePublisher):
     # 登录：等待跳转离开登录页
     # ─────────────────────────────────────────
 
-    def _wait_for_login(self, page, context):
+    def _wait_for_login(self, page, context) -> bool:
         print("请扫码或输入手机号登录知乎...")
         try:
             # 等待 URL 不再是登录页
@@ -34,8 +34,10 @@ class ZhihuPublisher(BasePublisher):
                 "() => !window.location.href.includes('/signin')",
                 timeout=120_000
             )
+            return True
         except PWTimeout:
             print("等待超时，请重新尝试")
+            return False
 
     # ─────────────────────────────────────────
     # 发布

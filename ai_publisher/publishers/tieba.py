@@ -27,7 +27,7 @@ class TiebaPublisher(BasePublisher):
     # 登录：百度账号扫码
     # ─────────────────────────────────────────
 
-    def _wait_for_login(self, page, context):
+    def _wait_for_login(self, page, context) -> bool:
         """百度贴吧：点登录按钮 → 扫码"""
         try:
             # 点击右上角登录按钮
@@ -40,8 +40,10 @@ class TiebaPublisher(BasePublisher):
         try:
             # 等待登录成功（页面出现用户头像或昵称）
             page.wait_for_selector('.u_name, .user-name, .userName', timeout=120_000)
+            return True
         except PWTimeout:
             print("等待超时，请重新尝试")
+            return False
 
     # ─────────────────────────────────────────
     # 发布
