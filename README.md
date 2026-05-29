@@ -85,17 +85,74 @@ AI 处理  → 自动分析内容 + 生成各平台适配文案
 │   ├── task_manager.py     # 任务状态机
 │   ├── ai_processor.py     # AI 分析与内容生成
 │   ├── publisher_runner.py # 发布流程编排
-│   ├── publishers/         # 各平台发布器
-│   │   ├── base.py         # 发布器基类
-│   │   ├── xiaohongshu.py  # 小红书
-│   │   ├── zhihu.py        # 知乎
-│   │   ├── tieba.py        # 贴吧
-│   │   └── wechat.py       # 公众号
-│   ├── data/               # 运行时数据（不上传 Git）
+│   ├── publishers/           # 各平台发布器
+│   │   ├── base.py           # 发布器基类
+│   │   ├── xiaohongshu.py    # 小红书
+│   │   ├── zhihu.py          # 知乎
+│   │   ├── tieba.py          # 贴吧
+│   │   ├── wechat.py         # 公众号
+│   │   └── mock.py           # 模拟发布
+│   ├── platform_registry.py  # 平台注册表
+│   ├── data/                 # 运行时数据（不上传 Git）
 │   └── requirements.txt
-├── tests/                  # 单元测试
-└── CLAUDE.md               # AI 开发规范
+├── tests/                    # 单元测试
+└── CLAUDE.md                 # AI 开发规范
 ```
+
+## 模拟发布模式
+
+在侧边栏开启"模拟发布模式"后，新建任务时可选"模拟发布"平台。发布流程完全在本地模拟运行，不打开浏览器、不需要任何平台账号。
+
+或通过环境变量启用：
+
+```bash
+SIMULATED_MODE=true
+```
+
+## 扩展新平台
+
+基于 `PlatformRegistry` 架构，添加新平台只需 2 步：
+
+**1. 创建 `publishers/new_platform.py`，继承 `BasePublisher`：**
+
+```python
+class NewPlatformPublisher(BasePublisher):
+    platform_key  = "new_plat"
+    platform_name = "新平台"
+    login_url     = "https://example.com/login"
+    icon          = "🆕"
+
+    def _wait_for_login(self, page, context) -> bool:
+        # 登录等待逻辑
+        ...
+
+    def publish(self, content: dict, images: list[str]) -> dict:
+        # 发布流程
+        ...
+
+# 模块底部自注册
+from platform_registry import PlatformRegistry, PlatformDescriptor
+PlatformRegistry.register(PlatformDescriptor(
+    key="new_plat", name="新平台", icon="🆕",
+    publisher_class=NewPlatformPublisher,
+    login_url="https://example.com/login",
+    ai_spec="新平台规范：...",
+    output_schema='"new_plat": {"title": "...", "body": "...", "tags": [...]}',
+))
+```
+
+**2. 在 `publishers/__init__.py` 加一行 `from . import new_platform`**
+
+`PlatformDescriptor` 支持的能力属性：
+
+| 属性 | 说明 |
+|------|------|
+| `needs_manual_scan` | 每次发布都需扫码 |
+| `skip_login_check` | 跳过登录检查（如公众号、模拟发布） |
+| `has_tags` | AI 输出包含 tags 字段 |
+| `has_bar_selection` | 用户需选择目标社区/吧 |
+| `needs_warning_in_review` | 审核队列显示警告 |
+| `sidebar_btn_label` / `logged_in_label` / `login_message` | UI 文案定制 |
 
 ## 依赖
 
