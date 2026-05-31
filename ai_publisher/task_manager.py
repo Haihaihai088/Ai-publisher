@@ -197,8 +197,8 @@ def update_status(task_id: str, status: str, error: str = None):
         save_task(task)
 
 
-def update_ai_results(task_id: str, analysis: dict, ai_results: dict):
-    """AI处理完成后，写入分析结果和各平台内容"""
+def update_ai_results(task_id: str, analysis: dict | None, ai_results: dict):
+    """AI处理完成后，写入分析结果和各平台内容。analysis 为 None 表示跳过AI分析。"""
     with _task_lock(task_id):
         task = load_task(task_id)
         if task is None:

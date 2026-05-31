@@ -201,9 +201,17 @@ with tab_new:
                     unsafe_allow_html=True
                 )
 
-    # 提交按钮
+    # 跳过AI选项
     st.divider()
-    if st.button("🤖 开始 AI 处理", type="primary", use_container_width=True):
+    skip_ai = st.checkbox(
+        "📋 跳过AI润色，原文直接发布到各平台",
+        value=False,
+        help="勾选后不再调用AI改写，原文将直接作为各平台的发布内容"
+    )
+
+    # 提交按钮
+    btn_label = "📋 创建发布任务" if skip_ai else "🤖 开始 AI 处理"
+    if st.button(btn_label, type="primary", use_container_width=True):
         # 验证
         if not content_input or not content_input.strip():
             st.error("请先输入或上传内容")
@@ -224,19 +232,38 @@ with tab_new:
             image_paths.append(str(dest.relative_to(config.DATA_DIR)))
 
         try:
+            content_text = content_input.strip()
+
             # 创建任务
             task = task_manager.create_task(
-                original_content=content_input.strip(),
+                original_content=content_text,
                 platforms=selected_platforms,
                 images=image_paths,
             )
 
-            # 启动 AI 处理子进程
-            import ai_processor
-            ai_processor.start_processing(task["id"])
+            if skip_ai:
+                # 跳过 AI：直接用原文作为各平台内容
+                lines = [l.strip() for l in content_text.split("\n") if l.strip()]
+                auto_title = lines[0][:30] if lines else content_text[:30]
+                auto_body = content_text
 
-            st.success(f"✅ 任务已创建（ID: {task['id']}），AI 正在处理中…")
-            st.info("请切换到「任务看板」查看进度，或切换到「审核队列」等待 AI 完成")
+                ai_results = {}
+                for plat in selected_platforms:
+                    desc = PlatformRegistry.get(plat)
+                    entry = {"title": auto_title, "body": auto_body}
+                    if desc and desc.has_tags:
+                        entry["tags"] = []
+                    ai_results[plat] = entry
+
+                task_manager.update_ai_results(task["id"], None, ai_results)
+                st.success(f"✅ 任务已创建（ID: {task['id']}），请到「审核队列」确认并发布")
+            else:
+                # 正常 AI 处理流程
+                import ai_processor
+                ai_processor.start_processing(task["id"])
+                st.success(f"✅ 任务已创建（ID: {task['id']}），AI 正在处理中…")
+                st.info("请切换到「任务看板」查看进度，或切换到「审核队列」等待 AI 完成")
+
             time.sleep(1)
             st.rerun()
         except Exception as e:
