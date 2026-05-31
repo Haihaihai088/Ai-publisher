@@ -85,13 +85,15 @@ class XiaohongshuPublisher(BasePublisher):
                 title_input.wait_for(state="visible", timeout=10_000)
                 title_input.fill(title)
 
-                # 4. 填写正文（参照 social-auto-upload 的 keyboard.type）
-                desc_editor = page.locator('#post-textarea, p[data-placeholder*="正文"]').first
+                # 4. 填写正文（完全对齐 social-auto-upload fill_desc）
+                desc_editor = page.locator('p[data-placeholder*="输入正文描述"]').first
                 desc_editor.wait_for(state="visible", timeout=10_000)
                 desc_editor.click()
+                page.keyboard.press("Backspace")
                 page.keyboard.press("Control+A")
                 page.keyboard.press("Delete")
-                page.keyboard.type(body, delay=5)
+                page.keyboard.type(body)
+                page.keyboard.press("Enter")  # ← 关键：Enter 收尾才能激活发布按钮
 
                 # 5. 追加话题标签（参照 social-auto-upload fill_tags 模式）
                 for tag in tags:
