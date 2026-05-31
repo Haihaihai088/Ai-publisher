@@ -62,49 +62,70 @@ class ZhihuPublisher(BasePublisher):
                 if "signin" in page.url:
                     return {"success": False, "url": None, "error": "Cookie 已过期，请重新登录"}
 
-                # 2. 填写标题
-                title_input = page.locator('.TitleInput, input[placeholder*="标题"]').first
+                # 2. 填写标题（多选择器 fallback）
+                title_input = page.locator(
+                    '.TitleInput input, .WriteTitle input, input[placeholder*="标题"], '
+                    '[class*="title"] input, .title-input'
+                ).first
+                title_input.wait_for(state="visible", timeout=15_000)
                 title_input.click()
+                page.wait_for_timeout(300)
                 title_input.fill(title)
 
-                # 3. 填写正文（知乎编辑器是 contenteditable div）
-                # 点击编辑区域激活
-                editor = page.locator('.DraftEditor-root, .PublishEditor .editorarea').first
+                # 3. 填写正文
+                editor = page.locator(
+                    '.DraftEditor-root, .PublishEditor .editorarea, '
+                    '[contenteditable="true"], .public-DraftEditor-content, '
+                    '.Editor-content, [class*="editor"]'
+                ).first
+                editor.wait_for(state="visible", timeout=10_000)
                 editor.click()
+                page.wait_for_timeout(500)
 
                 # 逐段输入
                 for line in body.split("\n"):
-                    page.keyboard.type(line, delay=10)
+                    if line.strip():
+                        page.keyboard.type(line, delay=10)
                     page.keyboard.press("Enter")
 
                 # 4. 插入图片（如果有）
                 if images:
                     try:
                         # 知乎编辑器工具栏的图片按钮
-                        img_btn = page.locator('button[data-type="image"], .toolbar-item[title*="图片"]').first
+                        img_btn = page.locator(
+                            'button[data-type="image"], .toolbar-item[title*="图片"], '
+                            '[aria-label*="图片"], button:has-text("图片")'
+                        ).first
                         img_btn.click(timeout=5_000)
-                        page.locator('input[type="file"]').set_input_files(images[:9])  # 最多9张
-                        page.wait_for_timeout(3_000)  # 等待上传
+                        page.wait_for_timeout(1000)
+                        file_input = page.locator('input[type="file"]').first
+                        file_input.wait_for(state="attached", timeout=5_000)
+                        file_input.set_input_files(images[:9])
+                        page.wait_for_timeout(3_000)
                     except PWTimeout:
                         pass  # 图片上传失败不阻断发布
 
                 # 5. 点击发布按钮
-                publish_btn = page.locator('button:has-text("发布"), .PublishPanel button').last
+                publish_btn = page.locator(
+                    'button:has-text("发布"), .PublishPanel button, '
+                    '[class*="publish"] button, [class*="submit"] button'
+                ).last
+                publish_btn.wait_for(state="visible", timeout=10_000)
                 publish_btn.click()
 
-                # 6. 处理发布确认弹窗（知乎有时会弹）
+                # 6. 处理发布确认弹窗
                 try:
-                    confirm_btn = page.locator('button:has-text("确认发布"), button:has-text("发布文章")').first
+                    confirm_btn = page.locator(
+                        'button:has-text("确认发布"), button:has-text("发布文章"), '
+                        'button:has-text("确定")'
+                    ).first
                     confirm_btn.click(timeout=5_000)
                 except PWTimeout:
-                    pass  # 没有弹窗，继续
+                    pass
 
                 # 7. 等待跳转到文章页
                 page.wait_for_url("**/zhuanlan.zhihu.com/p/**", timeout=config.PUBLISH_TIMEOUT)
                 article_url = page.url
-
-                # 8. 处理话题标签（知乎在发布后可以添加话题，也可在发布前）
-                # 简化处理：略过自动添加话题，正文中已包含话题关键词
 
                 self.save_cookies(context.cookies())
                 return {"success": True, "url": article_url, "error": None}

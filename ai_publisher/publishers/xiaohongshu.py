@@ -61,44 +61,57 @@ class XiaohongshuPublisher(BasePublisher):
             page = context.new_page()
 
             try:
-                # 1. 打开发布页
-                page.goto("https://creator.xiaohongshu.com/publish/publish",
-                          wait_until="networkidle", timeout=30_000)
+                # 1. 打开发布页（直接用图文URL）
+                page.goto(
+                    "https://creator.xiaohongshu.com/publish/publish?from=homepage&target=image",
+                    wait_until="networkidle", timeout=30_000
+                )
 
-                # 2. 选择图文笔记（如果有选项卡）
-                try:
-                    page.locator("text=图文").first.click(timeout=5_000)
-                except PWTimeout:
-                    pass  # 有些版本没有选项卡，默认就是图文
-
-                # 3. 上传图片
+                # 2. 上传图片（多选择器fallback匹配新版页面）
                 if images:
-                    self._upload_images(
-                        page,
-                        'input[type="file"][accept*="image"]',
-                        images
-                    )
-                    # 等待图片上传完成（等待缩略图出现）
-                    page.wait_for_selector(".upload-item--thumbnail", timeout=30_000)
+                    # 先尝试标准选择器，失败则用 content class 选择器
+                    upload_input = page.locator('input[type="file"][accept*="image"]').first
+                    if not upload_input.count():
+                        upload_input = page.locator(
+                            "div[class^='upload-content'] input[class='upload-input']"
+                        ).first
+                    if not upload_input.count():
+                        upload_input = page.locator('input[type="file"]').first
+                    upload_input.wait_for(state="attached", timeout=15_000)
+                    upload_input.set_input_files(images)
+                    # 等待图片上传完成
+                    page.wait_for_timeout(3000)
 
-                # 4. 填写标题
-                title_input = page.locator('input[placeholder*="标题"]').first
+                # 3. 填写标题
+                title_input = page.locator('input[placeholder*="填写标题"]').first
+                if not title_input.count():
+                    title_input = page.locator('input[placeholder*="标题"]').first
+                title_input.wait_for(state="visible", timeout=10_000)
                 title_input.click()
                 title_input.fill(title)
 
-                # 5. 填写正文（contenteditable）
-                body_editor = page.locator('.ql-editor, [contenteditable="true"]').first
+                # 4. 填写正文（contenteditable 或 quill 编辑器）
+                body_editor = page.locator(
+                    '.ql-editor, [contenteditable="true"], #post-textarea'
+                ).first
+                body_editor.wait_for(state="visible", timeout=10_000)
                 body_editor.click()
+                page.wait_for_timeout(500)
                 # 逐行输入，保留换行
                 for line in body.split("\n"):
-                    page.keyboard.type(line, delay=15)
+                    page.keyboard.type(line, delay=10)
                     page.keyboard.press("Enter")
+                # 删除最后多余的换行
+                page.keyboard.press("Backspace")
 
-                # 6. 点击发布按钮
-                publish_btn = page.locator('button:has-text("发布"), button:has-text("发布笔记")').last
+                # 5. 点击发布按钮
+                publish_btn = page.locator(
+                    'button:has-text("发布"), button:has-text("发布笔记")'
+                ).last
+                publish_btn.wait_for(state="visible", timeout=10_000)
                 publish_btn.click()
 
-                # 7. 等待发布成功（URL 跳转或成功提示）
+                # 6. 等待发布成功（URL 跳转或成功提示）
                 try:
                     page.wait_for_url("**/publish/success**", timeout=config.PUBLISH_TIMEOUT)
                     url = page.url
