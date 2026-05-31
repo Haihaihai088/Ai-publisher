@@ -4,12 +4,15 @@
 
 支持平台：小红书 | 知乎 | 贴吧 | 微信公众号
 
+> 📺 **Demo 视频**：[B站观看](https://www.bilibili.com/video/BV18TVS6ZE22/)
+
 ## 功能
 
 - **AI 内容分析** — 提取主题、关键词、情感倾向，推荐热词
 - **多平台适配** — 自动生成各平台适配标题、正文、标签
-- **审核队列** — 发布前逐平台审查和编辑 AI 生成内容
-- **一键发布** — 通过 Playwright 在各平台自动发布
+- **跳过 AI 润色** — 勾选后原文直接发布，不经过 AI 改写
+- **审核队列** — 发布前逐平台审查和编辑内容
+- **一键发布** — 通过 Patchright（反检测 Playwright fork）在各平台自动发布
 - **任务看板** — 发布任务生命周期管理与状态追踪
 
 ## 安装
@@ -29,7 +32,7 @@ cd ai_publisher
 
 ```bash
 pip install -r requirements.txt
-playwright install chromium
+patchright install chromium
 cp .env.example .env   # 然后编辑 .env 填入 API Key
 ```
 
@@ -159,7 +162,7 @@ PlatformRegistry.register(PlatformDescriptor(
 | 库 | 版本 | 用途 |
 |------|------|------|
 | streamlit | >=1.32 | Web UI 框架 |
-| playwright | >=1.44 | 浏览器自动化 |
+| patchright | >=1.60 | 浏览器自动化（Playwright fork，内置反检测） |
 | openai | >=1.30 | AI API 调用（兼容 DeepSeek） |
 | python-dotenv | >=1.0.0 | 环境变量管理 |
 | pillow | >=10.0.0 | 图片处理 |
