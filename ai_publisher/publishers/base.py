@@ -120,12 +120,14 @@ class BasePublisher(ABC):
         只有 _wait_for_login 返回 True 才保存 Cookie，避免超时后空文件误判为已登录
         """
         with sync_playwright() as p:
-            browser = p.chromium.launch(
+            user_data_dir = config.PROFILES_DIR / self.platform_key
+            user_data_dir.mkdir(parents=True, exist_ok=True)
+            context = p.chromium.launch_persistent_context(
+                user_data_dir=str(user_data_dir),
                 headless=False,
                 slow_mo=config.BROWSER_SLOW_MO,
-                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"]
-            )
-            context = browser.new_context(
+                channel="chrome",
+                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
                 viewport={"width": 1280, "height": 800},
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -147,7 +149,7 @@ class BasePublisher(ABC):
                 print(f"[{self.platform_name}] 登录成功，Cookie 已保存")
             else:
                 print(f"[{self.platform_name}] 登录未完成，Cookie 未保存")
-            browser.close()
+            context.close()
 
     def _wait_for_login(self, page: Page, context: BrowserContext) -> bool:
         """

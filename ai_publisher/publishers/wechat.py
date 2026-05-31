@@ -54,8 +54,23 @@ class WechatPublisher(BasePublisher):
     def login_blocking(self):
         """打开公众号页面让用户确认账号可用"""
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False, slow_mo=300)
-            context = browser.new_context(locale="zh-CN")
+            user_data_dir = config.PROFILES_DIR / "wechat"
+            user_data_dir.mkdir(parents=True, exist_ok=True)
+            context = p.chromium.launch_persistent_context(
+                user_data_dir=str(user_data_dir),
+                headless=False,
+                slow_mo=config.BROWSER_SLOW_MO,
+                channel="chrome",
+                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+                viewport={"width": 1280, "height": 800},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/148.0.0.0 Safari/537.36"
+                ),
+                locale="zh-CN",
+            )
+            self._add_stealth_scripts(context)
             page = context.new_page()
             page.goto("https://mp.weixin.qq.com/", wait_until="domcontentloaded")
             print("请用微信扫码登录公众号后台，验证账号可用...")
@@ -70,7 +85,7 @@ class WechatPublisher(BasePublisher):
                 print("公众号已配置完成")
             except PWTimeout:
                 print("等待超时，公众号未配置")
-            browser.close()
+            context.close()
 
     # ─────────────────────────────────────────
     # 发布（每次都需要扫码）
@@ -81,16 +96,24 @@ class WechatPublisher(BasePublisher):
         body  = content.get("body", "")
 
         with sync_playwright() as p:
-            # 公众号不注入 Cookie，每次全新登录
-            browser = p.chromium.launch(
+            # 公众号不注入 Cookie，每次全新登录（用持久化 profile 隐藏自动化特征）
+            user_data_dir = config.PROFILES_DIR / "wechat"
+            user_data_dir.mkdir(parents=True, exist_ok=True)
+            context = p.chromium.launch_persistent_context(
+                user_data_dir=str(user_data_dir),
                 headless=False,
                 slow_mo=config.BROWSER_SLOW_MO,
-                args=["--no-sandbox"]
-            )
-            context = browser.new_context(
+                channel="chrome",
+                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
                 viewport={"width": 1280, "height": 800},
-                locale="zh-CN"
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/148.0.0.0 Safari/537.36"
+                ),
+                locale="zh-CN",
             )
+            self._add_stealth_scripts(context)
             page = context.new_page()
 
             try:
@@ -199,7 +222,7 @@ class WechatPublisher(BasePublisher):
                     pass
                 return {"success": False, "url": None, "error": str(e)}
             finally:
-                browser.close()
+                context.close()
 
 
 # ─────────────────────────────────────────────
