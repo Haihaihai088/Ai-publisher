@@ -14,6 +14,7 @@ venv/
 # Runtime data
 ai_publisher/data/tasks/
 ai_publisher/data/cookies/
+ai_publisher/data/profiles/
 
 # IDE
 .idea/
