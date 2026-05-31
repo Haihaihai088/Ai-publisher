@@ -13,6 +13,7 @@ from typing import Optional
 from patchright.sync_api import sync_playwright, BrowserContext, Page
 
 import config
+from utils.qrcode_utils import build_qrcode_path, save_qrcode_image
 
 
 class BasePublisher(ABC):
@@ -96,6 +97,34 @@ class BasePublisher(ABC):
         stealth_path = config.DATA_DIR / "stealth.min.js"
         if stealth_path.exists():
             context.add_init_script(path=str(stealth_path))
+
+    # ─────────────────────────────────────────
+    # 登录二维码提取
+    # ─────────────────────────────────────────
+
+    @staticmethod
+    def _try_extract_qrcode(page: Page) -> Path | None:
+        """尝试从页面提取登录二维码图片，保存到 profiles 目录"""
+        try:
+            # 查找所有 data:image 类型的 img 元素（通常就是二维码）
+            img_elements = page.locator('img[src^="data:image/"]')
+            count = img_elements.count()
+            if count == 0:
+                return None
+
+            # 取第一个 data:image src（通常就是二维码）
+            src = img_elements.first.get_attribute("src")
+            if not src or not src.startswith("data:image/"):
+                return None
+
+            qrcode_path = build_qrcode_path("temp", config.PROFILES_DIR)
+            save_qrcode_image(src, qrcode_path)
+            print(f"\n   二维码已保存到: {qrcode_path}")
+            print(f"   如果浏览器窗口不方便扫码，请打开上述文件用手机扫描\n")
+            return qrcode_path
+        except Exception as e:
+            print(f"   (二维码自动提取未成功: {e})")
+            return None
 
     # ─────────────────────────────────────────
     # 登录流程（子进程，非阻塞）
