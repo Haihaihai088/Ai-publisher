@@ -13,7 +13,7 @@ from typing import Optional
 from patchright.sync_api import sync_playwright, BrowserContext, Page
 
 import config
-from utils.qrcode_utils import build_qrcode_path, save_qrcode_image
+from utils.qrcode_utils import build_qrcode_path, save_qrcode_image, remove_qrcode_file
 
 
 class BasePublisher(ABC):
@@ -171,14 +171,21 @@ class BasePublisher(ABC):
             print(f"[{self.platform_name}] 正在打开登录页...")
             page.goto(self.login_url, wait_until="domcontentloaded")
 
+            # 尝试提取并保存登录二维码
+            qrcode_path = self._try_extract_qrcode(page)
+
             # 各平台可以覆盖此方法，处理特殊登录逻辑
-            if self._wait_for_login(page, context):
-                cookies = context.cookies()
-                self.save_cookies(cookies)
-                print(f"[{self.platform_name}] 登录成功，Cookie 已保存")
-            else:
-                print(f"[{self.platform_name}] 登录未完成，Cookie 未保存")
-            context.close()
+            try:
+                if self._wait_for_login(page, context):
+                    cookies = context.cookies()
+                    self.save_cookies(cookies)
+                    print(f"[{self.platform_name}] 登录成功，Cookie 已保存")
+                else:
+                    print(f"[{self.platform_name}] 登录未完成，Cookie 未保存")
+            finally:
+                if remove_qrcode_file(qrcode_path):
+                    print(f"[{self.platform_name}] 临时二维码文件已清理")
+                context.close()
 
     def _wait_for_login(self, page: Page, context: BrowserContext) -> bool:
         """
