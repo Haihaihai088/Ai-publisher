@@ -252,8 +252,13 @@ class BasePublisher(ABC):
 
     @staticmethod
     def _upload_images(page: Page, file_input_selector: str, image_paths: list[str]):
-        """上传多张图片到 file input"""
+        """上传多张图片到 file input（带等待和 fallback）"""
         valid = [p for p in image_paths if Path(p).exists()]
         if not valid:
             return
-        page.locator(file_input_selector).set_input_files(valid)
+        locator = page.locator(file_input_selector).first
+        try:
+            locator.wait_for(state="attached", timeout=5_000)
+        except Exception:
+            pass  # 选择器不匹配，尝试直接用（部分平台隐藏 input 但可用）
+        locator.set_input_files(valid)
