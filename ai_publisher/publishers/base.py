@@ -120,10 +120,19 @@ class BasePublisher(ABC):
         with sync_playwright() as p:
             browser = p.chromium.launch(
                 headless=False,
-                slow_mo=300,
-                args=["--no-sandbox"]
+                slow_mo=config.BROWSER_SLOW_MO,
+                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"]
             )
-            context = browser.new_context(locale="zh-CN")
+            context = browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/148.0.0.0 Safari/537.36"
+                ),
+                locale="zh-CN",
+            )
+            self._add_stealth_scripts(context)
             page = context.new_page()
 
             print(f"[{self.platform_name}] 正在打开登录页...")
