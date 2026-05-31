@@ -62,11 +62,16 @@ class ZhihuPublisher(BasePublisher):
                 if "signin" in page.url:
                     return {"success": False, "url": None, "error": "Cookie 已过期，请重新登录"}
 
-                # 2. 填写标题 — 尝试所有可能的输入框
+                # 2. 填写标题 — 只匹配标题相关输入框
                 title_input = page.locator(
-                    'input[placeholder*="标题"], '
-                    'input[class*="title"], '
-                    'input:not([type="hidden"]):not([type="file"]):not([type="submit"])'
+                    # 知乎专栏标题输入框
+                    'textarea[placeholder*="输入标题"], '
+                    'input[placeholder*="文章标题"], '
+                    'textarea[placeholder*="标题"], '
+                    '.Write-titleInput input, '
+                    '.TitleInput input, '
+                    'input[data-testid*="title"], '
+                    '[class*="WriteTitle"] input'
                 ).first
                 title_input.wait_for(state="visible", timeout=15_000)
                 title_input.click()

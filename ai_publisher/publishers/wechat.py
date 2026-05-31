@@ -61,7 +61,7 @@ class WechatPublisher(BasePublisher):
                 headless=False,
                 slow_mo=config.BROWSER_SLOW_MO,
                 channel="chrome",
-                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+                args=["--no-sandbox", "--disable-gpu", "--disable-blink-features=AutomationControlled"],
                 viewport={"width": 1280, "height": 800},
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -96,15 +96,14 @@ class WechatPublisher(BasePublisher):
         body  = content.get("body", "")
 
         with sync_playwright() as p:
-            # 公众号不注入 Cookie，每次全新登录（用持久化 profile 隐藏自动化特征）
-            user_data_dir = config.PROFILES_DIR / "wechat"
-            user_data_dir.mkdir(parents=True, exist_ok=True)
-            context = p.chromium.launch_persistent_context(
-                user_data_dir=str(user_data_dir),
+            # 公众号不注入 Cookie，每次全新登录
+            browser = p.chromium.launch(
                 headless=False,
                 slow_mo=config.BROWSER_SLOW_MO,
                 channel="chrome",
-                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+                args=["--no-sandbox", "--disable-gpu", "--disable-blink-features=AutomationControlled"],
+            )
+            context = browser.new_context(
                 viewport={"width": 1280, "height": 800},
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -223,6 +222,7 @@ class WechatPublisher(BasePublisher):
                 return {"success": False, "url": None, "error": str(e)}
             finally:
                 context.close()
+                browser.close()
 
 
 # ─────────────────────────────────────────────

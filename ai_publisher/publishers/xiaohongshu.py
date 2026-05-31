@@ -106,12 +106,17 @@ class XiaohongshuPublisher(BasePublisher):
                     if line.strip():
                         page.keyboard.insert_text(line)
 
-                # 5. 点击发布按钮
+                # 5. 点击发布按钮（多选择器 fallback）
                 publish_btn = page.locator(
-                    'button:has-text("发布"), button:has-text("发布笔记")'
+                    '.publish-btn, '
+                    'button.publishBtn, '
+                    '[class*="publish"] button, '
+                    'button:has-text("发布笔记"), '
+                    'button:has-text("发布")'
                 ).last
                 publish_btn.wait_for(state="visible", timeout=10_000)
-                publish_btn.click()
+                page.wait_for_timeout(500)
+                publish_btn.click(force=True)
 
                 # 6. 等待发布成功（URL 跳转或成功提示）
                 try:
