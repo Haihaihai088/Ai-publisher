@@ -86,22 +86,30 @@ class TiebaPublisher(BasePublisher):
                 title_input = page.locator(
                     'input[name="title"], input[placeholder*="标题"], #title'
                 ).first
+                title_input.wait_for(state="visible", timeout=10_000)
                 title_input.click()
+                page.wait_for_timeout(300)
                 title_input.fill(title)
 
                 # 4. 填写正文
                 # 贴吧编辑器有两种：老版普通 textarea 和新版富文本
+                editor = page.locator(
+                    '.ProseMirror, [contenteditable="true"]'
+                ).first
                 try:
-                    # 尝试新版富文本编辑器
-                    editor = page.locator('.ProseMirror, [contenteditable="true"]').first
-                    editor.wait_for(timeout=5_000)
+                    editor.wait_for(state="visible", timeout=5_000)
                     editor.click()
+                    page.wait_for_timeout(300)
                     for line in body.split("\n"):
-                        page.keyboard.type(line, delay=10)
+                        if line.strip():
+                            page.keyboard.type(line, delay=10)
                         page.keyboard.press("Enter")
                 except PWTimeout:
                     # 回退到老版 textarea
-                    textarea = page.locator('textarea[name="content"], #content').first
+                    textarea = page.locator(
+                        'textarea[name="content"], #content, textarea'
+                    ).first
+                    textarea.wait_for(state="visible", timeout=5_000)
                     textarea.fill(body)
 
                 # 5. 上传图片（可选）
@@ -120,6 +128,7 @@ class TiebaPublisher(BasePublisher):
                 submit_btn = page.locator(
                     'button[type="submit"], input[type="submit"], button:has-text("发布"), #submit'
                 ).last
+                submit_btn.wait_for(state="visible", timeout=10_000)
                 submit_btn.click()
 
                 # 7. 等待发帖成功（跳转到帖子页或出现成功提示）
