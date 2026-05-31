@@ -16,9 +16,10 @@ DATA_DIR = BASE_DIR / "data"
 TASKS_DIR = DATA_DIR / "tasks"
 COOKIES_DIR = DATA_DIR / "cookies"
 UPLOADS_DIR = DATA_DIR / "uploads"
+PROFILES_DIR = DATA_DIR / "profiles"          # 持久化浏览器配置目录
 
 # 启动时自动创建必要目录
-for _dir in [TASKS_DIR, COOKIES_DIR, UPLOADS_DIR]:
+for _dir in [TASKS_DIR, COOKIES_DIR, UPLOADS_DIR, PROFILES_DIR]:
     _dir.mkdir(parents=True, exist_ok=True)
 
 # ─────────────────────────────────────────────

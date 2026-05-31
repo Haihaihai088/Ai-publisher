@@ -66,13 +66,15 @@ class BasePublisher(ABC):
     # ─────────────────────────────────────────
 
     def _new_context(self, playwright) -> BrowserContext:
-        """创建带 Cookie 和反检测脚本的浏览器上下文"""
-        browser = playwright.chromium.launch(
+        """创建持久化浏览器上下文（反检测增强）"""
+        user_data_dir = config.PROFILES_DIR / self.platform_key
+        user_data_dir.mkdir(parents=True, exist_ok=True)
+        context = playwright.chromium.launch_persistent_context(
+            user_data_dir=str(user_data_dir),
             headless=config.BROWSER_HEADLESS,
             slow_mo=config.BROWSER_SLOW_MO,
-            args=["--no-sandbox", "--disable-blink-features=AutomationControlled"]
-        )
-        context = browser.new_context(
+            channel="chrome",
+            args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
             viewport={"width": 1280, "height": 800},
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
