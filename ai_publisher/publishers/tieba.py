@@ -69,76 +69,90 @@ class TiebaPublisher(BasePublisher):
                 bar_url = f"https://tieba.baidu.com/f?kw={quote(tieba_name)}&ie=utf-8"
                 page.goto(bar_url, wait_until="domcontentloaded", timeout=30_000)
 
-                # 检查是否需要登录
                 if "passport.baidu.com" in page.url:
                     return {"success": False, "url": None, "error": "Cookie 已过期，请重新登录"}
 
                 # 2. 点击"发帖"按钮
                 post_btn = page.locator(
-                    'a:has-text("发帖"), .core_title_btn_wrapper a, #thread_submit'
+                    'a:has-text("发帖"), .core_title_btn_wrapper a, '
+                    '.tbui_aside_float_bar .tbui_aside_float_bar_new_post'
                 ).first
                 post_btn.click(timeout=10_000)
+                page.wait_for_timeout(2000)
 
-                # 等待发帖页面加载
-                page.wait_for_load_state("networkidle", timeout=15_000)
-
-                # 3. 填写标题
+                # 3. 填写标题（贴吧新版编辑器标题在 modal 中）
                 title_input = page.locator(
-                    'input[name="title"], input[placeholder*="标题"], #title'
+                    'input[name="title"], input[placeholder*="标题"], '
+                    'input[placeholder*="输入标题"], #title, '
+                    '.editor-title-input'
                 ).first
                 title_input.wait_for(state="visible", timeout=10_000)
                 title_input.click()
                 page.wait_for_timeout(300)
                 title_input.fill(title)
 
-                # 4. 填写正文
-                # 贴吧编辑器有两种：老版普通 textarea 和新版富文本
+                # 4. 填写正文 — insert_text 一次性粘贴
                 editor = page.locator(
-                    '.ProseMirror, [contenteditable="true"]'
+                    '.ProseMirror, [contenteditable="true"], '
+                    'textarea[name="content"], #content, .editor-content'
                 ).first
-                try:
-                    editor.wait_for(state="visible", timeout=5_000)
-                    editor.click()
-                    page.wait_for_timeout(300)
-                    for line in body.split("\n"):
-                        if line.strip():
-                            page.keyboard.type(line, delay=10)
-                        page.keyboard.press("Enter")
-                except PWTimeout:
-                    # 回退到老版 textarea
-                    textarea = page.locator(
-                        'textarea[name="content"], #content, textarea'
-                    ).first
-                    textarea.wait_for(state="visible", timeout=5_000)
-                    textarea.fill(body)
+                editor.wait_for(state="visible", timeout=10_000)
+                editor.click()
+                page.wait_for_timeout(300)
 
-                # 5. 上传图片（可选）
+                # 判断编辑器类型
+                tag_name = editor.evaluate("el => el.tagName")
+                if tag_name == "TEXTAREA":
+                    editor.fill(body)
+                else:
+                    page.keyboard.insert_text(body)
+
+                # 5. 上传图片 — 文件选择器模式（参照快手 social-auto-upload）
                 if images:
                     try:
                         img_btn = page.locator(
-                            'button[title*="图片"], .insert-img, .pic-button'
+                            '[title*="图片"], [aria-label*="图片"], '
+                            '.tbui_icon_picture, .icon-picture, '
+                            'a:has-text("图片"), .insert-img'
                         ).first
-                        img_btn.click(timeout=5_000)
-                        page.locator('input[type="file"]').set_input_files(images[:9])
-                        page.wait_for_timeout(3_000)
-                    except PWTimeout:
-                        pass  # 图片上传失败不阻断
+                        with page.expect_file_chooser() as fc_info:
+                            img_btn.click(timeout=5_000)
+                        file_chooser = fc_info.value
+                        file_chooser.set_files(images[:9])
+                        page.wait_for_timeout(5_000)
+                    except Exception:
+                        # fallback: 直接找 file input
+                        try:
+                            file_input = page.locator('input[type="file"]').first
+                            file_input.wait_for(state="attached", timeout=5_000)
+                            file_input.set_input_files(images[:9])
+                            page.wait_for_timeout(5_000)
+                        except Exception:
+                            pass
 
-                # 6. 提交发帖
-                submit_btn = page.locator(
-                    'button[type="submit"], input[type="submit"], button:has-text("发布"), #submit'
-                ).last
-                submit_btn.wait_for(state="visible", timeout=10_000)
-                submit_btn.click()
+                # 6. 提交 — 重试循环模式
+                for _ in range(10):
+                    try:
+                        submit_btn = page.locator(
+                            'button[type="submit"], input[type="submit"], '
+                            'button:has-text("发布"), button:has-text("发表"), #submit'
+                        ).last
+                        submit_btn.click(timeout=3000)
+                        page.wait_for_url("**/tieba.baidu.com/p/**", timeout=5000)
+                        break
+                    except Exception:
+                        page.wait_for_timeout(2000)
 
-                # 7. 等待发帖成功（跳转到帖子页或出现成功提示）
+                # 7. 等待发帖成功
+                post_url = page.url
                 try:
                     page.wait_for_url("**/tieba.baidu.com/p/**", timeout=config.PUBLISH_TIMEOUT)
                     post_url = page.url
                 except PWTimeout:
-                    # 部分情况不跳转，尝试找成功提示
-                    page.wait_for_selector("text=发布成功, text=发帖成功", timeout=10_000)
-                    post_url = page.url
+                    try:
+                        page.wait_for_selector("text=发布成功, text=发帖成功", timeout=10_000)
+                    except Exception:
+                        pass
 
                 self.save_cookies(context.cookies())
                 return {"success": True, "url": post_url, "error": None}

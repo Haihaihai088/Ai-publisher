@@ -51,91 +51,76 @@ class XiaohongshuPublisher(BasePublisher):
         body  = content.get("body", "")
         tags  = content.get("tags", [])
 
-        # 正文截断到1000字 + 追加话题标签
         MAX_BODY = 1000
-        tag_text = " ".join(f"#{t}" for t in tags)
         if len(body) > MAX_BODY:
             body = body[:MAX_BODY - 3] + "..."
-        if tag_text and tag_text not in body:
-            body = body.rstrip() + "\n\n" + tag_text
 
         with sync_playwright() as p:
             context = self._new_context(p)
             page = context.new_page()
 
             try:
-                # 1. 打开发布页（直接用图文URL）
+                # 1. 打开图文发布页
                 page.goto(
                     "https://creator.xiaohongshu.com/publish/publish?from=homepage&target=image",
                     wait_until="networkidle", timeout=30_000
                 )
 
-                # 2. 上传图片
+                # 2. 上传图片（参照 social-auto-upload 模式）
                 if images:
                     upload_input = page.locator('input[type="file"][accept*="image"]').first
                     if not upload_input.count():
                         upload_input = page.locator(
                             "div[class^='upload-content'] input[class='upload-input']"
                         ).first
-                    if not upload_input.count():
-                        upload_input = page.locator('input[type="file"]').first
-                    upload_input.wait_for(state="attached", timeout=15_000)
+                    upload_input.wait_for(state="attached", timeout=30_000)
                     upload_input.set_input_files(images)
-                    page.wait_for_timeout(3000)
+                    # 等待标题输入框出现 = 图片上传完成
+                    page.locator('input[placeholder*="填写标题"]').first.wait_for(
+                        state="visible", timeout=60_000
+                    )
 
                 # 3. 填写标题（fill 一步到位）
                 title_input = page.locator('input[placeholder*="填写标题"]').first
-                if not title_input.count():
-                    title_input = page.locator('input[placeholder*="标题"]').first
                 title_input.wait_for(state="visible", timeout=10_000)
-                title_input.click()
                 title_input.fill(title)
 
-                # 4. 填写正文（insert_text 一次性输入，比逐行快几十倍）
-                body_editor = page.locator(
-                    '.ql-editor, [contenteditable="true"], #post-textarea'
-                ).first
-                body_editor.wait_for(state="visible", timeout=10_000)
-                body_editor.click()
-                page.wait_for_timeout(300)
-                # 用 Shift+Enter 保留换行（小红书不常用 Enter 分段）
-                lines = body.split("\n")
-                for i, line in enumerate(lines):
-                    if i > 0:
-                        page.keyboard.press("Enter")
-                    if line.strip():
-                        page.keyboard.insert_text(line)
+                # 4. 填写正文（参照 social-auto-upload 的 keyboard.type）
+                desc_editor = page.locator('#post-textarea, p[data-placeholder*="正文"]').first
+                desc_editor.wait_for(state="visible", timeout=10_000)
+                desc_editor.click()
+                page.keyboard.press("Control+A")
+                page.keyboard.press("Delete")
+                page.keyboard.type(body, delay=5)
 
-                # 5. 点击发布按钮（多选择器 fallback）
-                publish_btn = page.locator(
-                    '.publish-btn, '
-                    'button.publishBtn, '
-                    '[class*="publish"] button, '
-                    'button:has-text("发布笔记"), '
-                    'button:has-text("发布")'
-                ).last
-                publish_btn.wait_for(state="visible", timeout=10_000)
-                page.wait_for_timeout(500)
-                publish_btn.click(force=True)
+                # 5. 追加话题标签（参照 social-auto-upload fill_tags 模式）
+                for tag in tags:
+                    page.keyboard.type("#" + tag, delay=30)
+                    try:
+                        topic_container = page.locator('#creator-editor-topic-container').first
+                        topic_container.wait_for(state="visible", timeout=3000)
+                        first_item = page.locator('#creator-editor-topic-container .item').first
+                        first_item.click()
+                    except Exception:
+                        pass
 
-                # 6. 等待发布成功（URL 跳转或成功提示）
-                try:
-                    page.wait_for_url("**/publish/success**", timeout=config.PUBLISH_TIMEOUT)
-                    url = page.url
-                except PWTimeout:
-                    # 部分情况不跳转，检查提示文字
-                    page.wait_for_selector("text=发布成功", timeout=10_000)
-                    url = page.url
+                # 6. 发布 — 参照 social-auto-upload 重试循环模式
+                url = page.url
+                for _ in range(30):  # 最多重试 30 次
+                    try:
+                        page.locator('button:has-text("发布")').click()
+                        page.wait_for_url("**/publish/success**", timeout=3000)
+                        url = page.url
+                        break
+                    except Exception:
+                        page.wait_for_timeout(1000)
 
-                # 保存最新 Cookie
                 self.save_cookies(context.cookies())
                 return {"success": True, "url": url, "error": None}
 
             except Exception as e:
-                # 截图保存，方便排查问题
-                screenshot_path = config.DATA_DIR / f"error_xhs_{page.url.split('/')[-1]}.png"
                 try:
-                    page.screenshot(path=str(screenshot_path))
+                    page.screenshot(path=str(config.DATA_DIR / "error_xhs_publish.png"))
                 except Exception:
                     pass
                 return {"success": False, "url": None, "error": str(e)}
