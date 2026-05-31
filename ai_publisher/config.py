@@ -78,7 +78,7 @@ class PublishStatus:
     SKIPPED   = "skipped"    # 用户跳过
 
 # ─────────────────────────────────────────────
-# Playwright 配置
+# Patchright 浏览器配置 (Playwright fork, 内置反检测能力)
 # ─────────────────────────────────────────────
 BROWSER_HEADLESS = False          # 发布时展示浏览器（方便调试和扫码）
 BROWSER_SLOW_MO  = 500            # 操作间隔毫秒，太快容易被风控
