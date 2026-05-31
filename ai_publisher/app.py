@@ -243,8 +243,19 @@ with tab_new:
 
             if skip_ai:
                 # 跳过 AI：直接用原文作为各平台内容
-                lines = [l.strip() for l in content_text.split("\n") if l.strip()]
-                auto_title = lines[0][:30] if lines else content_text[:30]
+                # 智能提取标题：取首句（以。！？结束），最长40字
+                content_clean = content_text.strip()
+                sentence_end = None
+                for i, ch in enumerate(content_clean):
+                    if i > 40:
+                        break
+                    if ch in "。！？!?\n":
+                        sentence_end = i + 1
+                        break
+                if sentence_end and sentence_end > 4:
+                    auto_title = content_clean[:sentence_end].strip()
+                else:
+                    auto_title = content_clean[:40].strip()
                 auto_body = content_text
 
                 ai_results = {}

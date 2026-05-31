@@ -51,8 +51,11 @@ class XiaohongshuPublisher(BasePublisher):
         body  = content.get("body", "")
         tags  = content.get("tags", [])
 
-        # 正文末尾追加话题标签（如果 body 里没有）
+        # 正文截断到1000字 + 追加话题标签
+        MAX_BODY = 1000
         tag_text = " ".join(f"#{t}" for t in tags)
+        if len(body) > MAX_BODY:
+            body = body[:MAX_BODY - 3] + "..."
         if tag_text and tag_text not in body:
             body = body.rstrip() + "\n\n" + tag_text
 
@@ -67,9 +70,8 @@ class XiaohongshuPublisher(BasePublisher):
                     wait_until="networkidle", timeout=30_000
                 )
 
-                # 2. 上传图片（多选择器fallback匹配新版页面）
+                # 2. 上传图片
                 if images:
-                    # 先尝试标准选择器，失败则用 content class 选择器
                     upload_input = page.locator('input[type="file"][accept*="image"]').first
                     if not upload_input.count():
                         upload_input = page.locator(
@@ -79,10 +81,9 @@ class XiaohongshuPublisher(BasePublisher):
                         upload_input = page.locator('input[type="file"]').first
                     upload_input.wait_for(state="attached", timeout=15_000)
                     upload_input.set_input_files(images)
-                    # 等待图片上传完成
                     page.wait_for_timeout(3000)
 
-                # 3. 填写标题
+                # 3. 填写标题（fill 一步到位）
                 title_input = page.locator('input[placeholder*="填写标题"]').first
                 if not title_input.count():
                     title_input = page.locator('input[placeholder*="标题"]').first
@@ -90,19 +91,20 @@ class XiaohongshuPublisher(BasePublisher):
                 title_input.click()
                 title_input.fill(title)
 
-                # 4. 填写正文（contenteditable 或 quill 编辑器）
+                # 4. 填写正文（insert_text 一次性输入，比逐行快几十倍）
                 body_editor = page.locator(
                     '.ql-editor, [contenteditable="true"], #post-textarea'
                 ).first
                 body_editor.wait_for(state="visible", timeout=10_000)
                 body_editor.click()
-                page.wait_for_timeout(500)
-                # 逐行输入，保留换行
-                for line in body.split("\n"):
-                    page.keyboard.type(line, delay=10)
-                    page.keyboard.press("Enter")
-                # 删除最后多余的换行
-                page.keyboard.press("Backspace")
+                page.wait_for_timeout(300)
+                # 用 Shift+Enter 保留换行（小红书不常用 Enter 分段）
+                lines = body.split("\n")
+                for i, line in enumerate(lines):
+                    if i > 0:
+                        page.keyboard.press("Enter")
+                    if line.strip():
+                        page.keyboard.insert_text(line)
 
                 # 5. 点击发布按钮
                 publish_btn = page.locator(

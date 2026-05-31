@@ -62,47 +62,55 @@ class ZhihuPublisher(BasePublisher):
                 if "signin" in page.url:
                     return {"success": False, "url": None, "error": "Cookie 已过期，请重新登录"}
 
-                # 2. 填写标题（多选择器 fallback）
+                # 2. 填写标题 — 尝试所有可能的输入框
                 title_input = page.locator(
-                    '.TitleInput input, .WriteTitle input, input[placeholder*="标题"], '
-                    '[class*="title"] input, .title-input'
+                    'input[placeholder*="标题"], '
+                    'input[class*="title"], '
+                    'input:not([type="hidden"]):not([type="file"]):not([type="submit"])'
                 ).first
                 title_input.wait_for(state="visible", timeout=15_000)
                 title_input.click()
                 page.wait_for_timeout(300)
                 title_input.fill(title)
 
-                # 3. 填写正文
+                # 3. 填写正文 — insert_text 一次性粘贴
+                # 知乎编辑器：先点击编辑区域激活
                 editor = page.locator(
-                    '.DraftEditor-root, .PublishEditor .editorarea, '
-                    '[contenteditable="true"], .public-DraftEditor-content, '
-                    '.Editor-content, [class*="editor"]'
+                    '[contenteditable="true"], '
+                    '.DraftEditor-root, .public-DraftEditor-content, '
+                    '[role="textbox"], [class*="editor"], '
+                    '[class*="Editor"]'
                 ).first
                 editor.wait_for(state="visible", timeout=10_000)
                 editor.click()
                 page.wait_for_timeout(500)
 
-                # 逐段输入
-                for line in body.split("\n"):
-                    if line.strip():
-                        page.keyboard.type(line, delay=10)
-                    page.keyboard.press("Enter")
+                # 一次性粘贴全文（insert_text 比逐行 type 快几十倍）
+                page.keyboard.insert_text(body)
 
-                # 4. 插入图片（如果有）
+                # 4. 插入图片 — 尝试找图片上传入口
                 if images:
                     try:
-                        # 知乎编辑器工具栏的图片按钮
+                        # 策略A: 点击工具栏图片按钮
                         img_btn = page.locator(
-                            'button[data-type="image"], .toolbar-item[title*="图片"], '
-                            '[aria-label*="图片"], button:has-text("图片")'
+                            '[aria-label*="图片"], '
+                            'button[data-tooltip*="图片"], '
+                            '.toolbar-item:has-text("图片"), '
+                            'svg[class*="image"], '
+                            'button:has-text("图片")'
                         ).first
-                        img_btn.click(timeout=5_000)
-                        page.wait_for_timeout(1000)
+                        img_btn.click(timeout=3_000)
+                        page.wait_for_timeout(800)
+                    except Exception:
+                        pass
+
+                    try:
+                        # 策略B: 直接找 file input（可能始终在DOM中）
                         file_input = page.locator('input[type="file"]').first
                         file_input.wait_for(state="attached", timeout=5_000)
                         file_input.set_input_files(images[:9])
-                        page.wait_for_timeout(3_000)
-                    except PWTimeout:
+                        page.wait_for_timeout(5_000)
+                    except Exception:
                         pass  # 图片上传失败不阻断发布
 
                 # 5. 点击发布按钮
