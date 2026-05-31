@@ -3,8 +3,8 @@
 echo "📦 安装 Python 依赖..."
 pip3 install -r requirements.txt
 
-echo "🌐 安装 Playwright 浏览器..."
-playwright install chromium
+echo "🌐 安装 Patchright 浏览器..."
+patchright install chromium
 
 echo "📁 创建数据目录..."
 mkdir -p data/tasks data/cookies data/uploads

@@ -11,7 +11,7 @@
 import sys
 from pathlib import Path
 from urllib.parse import quote
-from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+from patchright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from publishers.base import BasePublisher

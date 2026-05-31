@@ -10,7 +10,7 @@
 
 import sys
 from pathlib import Path
-from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+from patchright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
 # 支持直接运行此文件
 sys.path.insert(0, str(Path(__file__).parent.parent))

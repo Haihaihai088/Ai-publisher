@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
 
-from playwright.sync_api import sync_playwright, BrowserContext, Page
+from patchright.sync_api import sync_playwright, BrowserContext, Page
 
 import config
 
@@ -66,7 +66,7 @@ class BasePublisher(ABC):
     # ─────────────────────────────────────────
 
     def _new_context(self, playwright) -> BrowserContext:
-        """创建带 Cookie 的浏览器上下文"""
+        """创建带 Cookie 和反检测脚本的浏览器上下文"""
         browser = playwright.chromium.launch(
             headless=config.BROWSER_HEADLESS,
             slow_mo=config.BROWSER_SLOW_MO,
@@ -81,10 +81,19 @@ class BasePublisher(ABC):
             ),
             locale="zh-CN",
         )
+        # 注入反检测脚本
+        self._add_stealth_scripts(context)
         cookies = self.load_cookies()
         if cookies:
             context.add_cookies(cookies)
         return context
+
+    @staticmethod
+    def _add_stealth_scripts(context: BrowserContext):
+        """注入 stealth.min.js 反检测脚本，隐藏自动化浏览器特征"""
+        stealth_path = config.DATA_DIR / "stealth.min.js"
+        if stealth_path.exists():
+            context.add_init_script(path=str(stealth_path))
 
     # ─────────────────────────────────────────
     # 登录流程（子进程，非阻塞）
